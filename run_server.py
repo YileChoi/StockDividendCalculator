@@ -7,7 +7,7 @@ import webbrowser
 
 from werkzeug.serving import make_server
 
-from app import app, ensure_ledger_file
+from app import app, ensure_family_db_file, ensure_ledger_file
 
 
 def find_available_port(host: str, preferred_port: int, max_checks: int = 200) -> int:
@@ -30,6 +30,7 @@ def main() -> None:
     preferred_port = 5000
 
     ensure_ledger_file()
+    ensure_family_db_file()
     port = find_available_port(host, preferred_port)
 
     server = make_server(host, port, app, threaded=True)

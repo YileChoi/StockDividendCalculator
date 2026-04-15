@@ -15,6 +15,7 @@ app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024  # 2 MB
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 LEDGER_FILE = DATA_DIR / "ledger.json"
+FAMILY_DB_FILE = DATA_DIR / "family_dashboard.json"
 DEFAULT_LEDGER = {
     "schemaVersion": 1,
     "state": {
@@ -29,6 +30,13 @@ DEFAULT_LEDGER = {
     "changeHistory": [],
     "nextChangeId": 1,
 }
+DEFAULT_FAMILY_DB = {
+    "schemaVersion": 1,
+    "state": {
+        "families": [],
+        "nextFamilyId": 1,
+    },
+}
 
 
 def ensure_ledger_file() -> None:
@@ -36,6 +44,13 @@ def ensure_ledger_file() -> None:
     if LEDGER_FILE.exists():
         return
     _write_ledger(DEFAULT_LEDGER)
+
+
+def ensure_family_db_file() -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if FAMILY_DB_FILE.exists():
+        return
+    _write_family_db(DEFAULT_FAMILY_DB)
 
 
 def _read_ledger() -> dict:
@@ -65,6 +80,35 @@ def _write_ledger(payload: dict) -> None:
         tmp.flush()
         temp_path = Path(tmp.name)
     temp_path.replace(LEDGER_FILE)
+
+
+def _read_family_db() -> dict:
+    ensure_family_db_file()
+    try:
+        with FAMILY_DB_FILE.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        payload = DEFAULT_FAMILY_DB
+        _write_family_db(payload)
+    if not isinstance(payload, dict):
+        payload = DEFAULT_FAMILY_DB
+    return payload
+
+
+def _write_family_db(payload: dict) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        delete=False,
+        dir=str(DATA_DIR),
+        prefix="family-db-",
+        suffix=".tmp",
+    ) as tmp:
+        json.dump(payload, tmp, ensure_ascii=False, indent=2)
+        tmp.flush()
+        temp_path = Path(tmp.name)
+    temp_path.replace(FAMILY_DB_FILE)
 
 
 def _updated_at_iso() -> str:
@@ -140,6 +184,55 @@ def export_ledger():
     )
 
 
+@app.get("/api/family-db")
+def get_family_db():
+    payload = _read_family_db()
+    return jsonify(payload)
+
+
+@app.put("/api/family-db")
+def put_family_db():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"ok": False, "error": "Body must be a JSON object."}), 400
+
+    _write_family_db(payload)
+    return jsonify(
+        {
+            "ok": True,
+            "path": "data/family_dashboard.json",
+            "updatedAt": _updated_at_iso(),
+        }
+    )
+
+
+@app.post("/api/family-db/import")
+def import_family_db():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"ok": False, "error": "Imported file must be JSON object."}), 400
+
+    _write_family_db(payload)
+    return jsonify(
+        {
+            "ok": True,
+            "path": "data/family_dashboard.json",
+            "updatedAt": _updated_at_iso(),
+        }
+    )
+
+
+@app.get("/api/family-db/export")
+def export_family_db():
+    ensure_family_db_file()
+    return send_file(
+        FAMILY_DB_FILE,
+        mimetype="application/json",
+        as_attachment=True,
+        download_name="family_dashboard.json",
+    )
+
+
 @app.get("/api/server/status")
 def server_status():
     return jsonify(
@@ -173,4 +266,5 @@ def stop_server():
 
 if __name__ == "__main__":
     ensure_ledger_file()
+    ensure_family_db_file()
     app.run(debug=True)

@@ -3,4 +3,5 @@
 __pycache__/
 *.pyc
 data/ledger.json
+data/family_dashboard.json
 data/*.tmp
