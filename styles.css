@@ -66,6 +66,11 @@ body {
   border-color: #14563e;
 }
 
+.navTab:focus-visible {
+  outline: 2px solid #6cb68f;
+  outline-offset: 2px;
+}
+
 .appView {
   display: grid;
   gap: 1rem;
@@ -368,6 +373,20 @@ button.revertBtn {
   font-size: 0.87rem;
 }
 
+.advancedBlock {
+  margin-top: 0.55rem;
+}
+
+.advancedBlock summary {
+  cursor: pointer;
+  color: #285040;
+  font-weight: 600;
+}
+
+.advancedBlock[open] summary {
+  margin-bottom: 0.55rem;
+}
+
 .onHero {
   color: rgba(244, 255, 251, 0.9);
 }
@@ -454,6 +473,36 @@ button.revertBtn {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.detailTabs {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.detailTab {
+  background: #edf6f1;
+  color: #1f4d3a;
+  border: 1px solid #bfd9cb;
+  padding: 0.45rem 0.72rem;
+  border-radius: 999px;
+}
+
+.detailTab:hover {
+  filter: none;
+  background: #e4f1ea;
+}
+
+.detailTab.isActive {
+  background: #185a40;
+  color: #effff6;
+  border-color: #185a40;
+}
+
+.detailTab:focus-visible {
+  outline: 2px solid #6cb68f;
+  outline-offset: 2px;
+}
+
 .compactForm {
   margin-bottom: 0.8rem;
 }
@@ -516,6 +565,18 @@ th {
   font-size: 0.82rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+  white-space: nowrap;
 }
 
 .empty {

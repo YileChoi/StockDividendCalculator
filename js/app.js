@@ -78,6 +78,7 @@ let activeView = "calculator";
 
 bindEvents();
 initNavigation();
+initInfoTips();
 initFamilyDashboard();
 setDefaultDate();
 updateAutosaveState("File DB: connecting...");
@@ -106,6 +107,9 @@ async function init() {
 
 function bindEvents() {
   els.navTabs.forEach((tab) => tab.addEventListener("click", handleNavClick));
+  els.navTabs.forEach((tab) =>
+    tab.addEventListener("keydown", handleNavTabKeydown),
+  );
   els.memberForm.addEventListener("submit", handleMemberSubmit);
   els.transactionForm.addEventListener("submit", handleTransactionSubmit);
   els.valuationForm.addEventListener("submit", handleValuationSubmit);
@@ -133,6 +137,37 @@ function handleNavClick(event) {
   setActiveView(view, { updateHash: true });
 }
 
+function handleNavTabKeydown(event) {
+  const validKeys = new Set(["ArrowRight", "ArrowLeft", "Home", "End"]);
+  if (!validKeys.has(event.key)) {
+    return;
+  }
+  event.preventDefault();
+
+  const currentIndex = els.navTabs.indexOf(event.currentTarget);
+  if (currentIndex < 0) {
+    return;
+  }
+
+  let nextIndex = currentIndex;
+  if (event.key === "ArrowRight") {
+    nextIndex = (currentIndex + 1) % els.navTabs.length;
+  } else if (event.key === "ArrowLeft") {
+    nextIndex = (currentIndex - 1 + els.navTabs.length) % els.navTabs.length;
+  } else if (event.key === "Home") {
+    nextIndex = 0;
+  } else if (event.key === "End") {
+    nextIndex = els.navTabs.length - 1;
+  }
+
+  const nextTab = els.navTabs[nextIndex];
+  if (!nextTab) {
+    return;
+  }
+  nextTab.focus();
+  nextTab.click();
+}
+
 function handleHashChange() {
   const hashView = sanitizeView(window.location.hash.slice(1));
   if (!hashView || hashView === activeView) {
@@ -150,6 +185,8 @@ function setActiveView(view, { updateHash }) {
   for (const tab of els.navTabs) {
     const isActive = tab.dataset.view === view;
     tab.classList.toggle("isActive", isActive);
+    tab.setAttribute("aria-selected", isActive ? "true" : "false");
+    tab.tabIndex = isActive ? 0 : -1;
     if (isActive) {
       tab.setAttribute("aria-current", "page");
     } else {
@@ -176,6 +213,19 @@ function sanitizeView(value) {
     return "family-dashboard";
   }
   return "";
+}
+
+function initInfoTips() {
+  const infoTips = document.querySelectorAll(".infoTip[data-tip]");
+  for (const button of infoTips) {
+    const tipText = button.getAttribute("data-tip");
+    if (!tipText) {
+      continue;
+    }
+    if (!button.getAttribute("title")) {
+      button.setAttribute("title", tipText);
+    }
+  }
 }
 
 function setDefaultDate() {

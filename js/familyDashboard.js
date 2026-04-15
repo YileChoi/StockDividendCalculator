@@ -20,6 +20,7 @@ export function initFamilyDashboard() {
     els,
     db: createInitialDb(),
     activeFamilyId: null,
+    activeDetailView: "overview",
   };
 
   bindEvents(ctx);
@@ -71,6 +72,12 @@ function collectElements() {
     familyDetailPage: document.getElementById("familyDetailPage"),
     familySelectedTitle: document.getElementById("familySelectedTitle"),
     familyDeleteSelected: document.getElementById("familyDeleteSelected"),
+    familyDetailTabs: Array.from(
+      document.querySelectorAll(".detailTab[data-family-detail-view]"),
+    ),
+    familyDetailPanels: Array.from(
+      document.querySelectorAll("[data-family-detail-panel]"),
+    ),
 
     familyStatTotalValue: document.getElementById("familyStatTotalValue"),
     familyStatTotalInvested: document.getElementById("familyStatTotalInvested"),
@@ -137,6 +144,14 @@ function bindEvents(ctx) {
   els.familyTrendAccountSelect.addEventListener("change", () =>
     renderTrendChart(ctx),
   );
+  els.familyDetailTabs.forEach((tab) =>
+    tab.addEventListener("click", (event) => handleDetailTabClick(ctx, event)),
+  );
+  els.familyDetailTabs.forEach((tab) =>
+    tab.addEventListener("keydown", (event) =>
+      handleDetailTabKeydown(ctx, event),
+    ),
+  );
 
   window.addEventListener("hashchange", () => handleHashChange(ctx));
 }
@@ -185,9 +200,10 @@ async function handleCreateFamily(ctx, event) {
     }
 
     ctx.els.familyNameInput.value = "";
+    ctx.activeDetailView = "overview";
     setFamilyHash(family.id);
     renderAll(ctx);
-    setHubStatus(ctx.els, `Family "${name}" created.`);
+    setHubStatus(ctx.els, `Family "${name}" added.`);
   } catch (error) {
     setHubStatus(ctx.els, error.message, true);
   }
@@ -199,9 +215,10 @@ function handleFamilyTableClick(ctx, event) {
     const familyId = toPositiveInt(openBtn.dataset.familyOpen, null);
     if (familyId !== null && findFamily(ctx.db, familyId)) {
       ctx.activeFamilyId = familyId;
+      ctx.activeDetailView = "overview";
       setFamilyHash(familyId);
       renderAll(ctx);
-      setHubStatus(ctx.els, "Opened family page.");
+      setHubStatus(ctx.els, "Opened family details.");
     }
   }
 }
@@ -459,9 +476,50 @@ function handleHashChange(ctx) {
   if (familyId !== null && findFamily(ctx.db, familyId)) {
     if (ctx.activeFamilyId !== familyId) {
       ctx.activeFamilyId = familyId;
+      ctx.activeDetailView = "overview";
       renderAll(ctx);
     }
   }
+}
+
+function handleDetailTabClick(ctx, event) {
+  const view = event.currentTarget?.dataset?.familyDetailView;
+  if (!view) {
+    return;
+  }
+  setActiveDetailView(ctx, view);
+}
+
+function handleDetailTabKeydown(ctx, event) {
+  const validKeys = new Set(["ArrowRight", "ArrowLeft", "Home", "End"]);
+  if (!validKeys.has(event.key)) {
+    return;
+  }
+  event.preventDefault();
+
+  const tabs = ctx.els.familyDetailTabs;
+  const currentIndex = tabs.indexOf(event.currentTarget);
+  if (currentIndex < 0) {
+    return;
+  }
+
+  let nextIndex = currentIndex;
+  if (event.key === "ArrowRight") {
+    nextIndex = (currentIndex + 1) % tabs.length;
+  } else if (event.key === "ArrowLeft") {
+    nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+  } else if (event.key === "Home") {
+    nextIndex = 0;
+  } else if (event.key === "End") {
+    nextIndex = tabs.length - 1;
+  }
+
+  const nextTab = tabs[nextIndex];
+  if (!nextTab) {
+    return;
+  }
+  nextTab.focus();
+  nextTab.click();
 }
 
 function renderAll(ctx) {
@@ -488,7 +546,7 @@ function renderFamilyTable(ctx) {
         <td>${stats.memberCount}</td>
         <td>${stats.accountCount}</td>
         <td>${formatCents(stats.totalValueCents)}</td>
-        <td><button type="button" class="tableAction ghostBtn" data-family-open="${family.id}">Open</button></td>
+        <td><button type="button" class="tableAction ghostBtn" data-family-open="${family.id}">Open Family</button></td>
       </tr>`;
     })
     .join("");
@@ -499,12 +557,13 @@ function renderActiveFamilyView(ctx) {
   if (!family) {
     ctx.els.familyDetailEmpty.hidden = false;
     ctx.els.familyDetailPage.hidden = true;
+    setActiveDetailView(ctx, "overview");
     return;
   }
 
   ctx.els.familyDetailEmpty.hidden = true;
   ctx.els.familyDetailPage.hidden = false;
-  ctx.els.familySelectedTitle.textContent = `${family.name} - Individual Page`;
+  ctx.els.familySelectedTitle.textContent = `${family.name} details`;
 
   const stats = getFamilyStats(family);
   ctx.els.familyStatTotalValue.textContent = formatCents(stats.totalValueCents);
@@ -520,6 +579,25 @@ function renderActiveFamilyView(ctx) {
   renderEventsTable(ctx, family);
   renderAccountSelectors(ctx, family);
   renderTrendChart(ctx);
+  setActiveDetailView(ctx, ctx.activeDetailView);
+}
+
+function setActiveDetailView(ctx, view) {
+  const normalized = view === "analytics" ? "analytics" : "overview";
+  ctx.activeDetailView = normalized;
+
+  for (const tab of ctx.els.familyDetailTabs) {
+    const isActive = tab.dataset.familyDetailView === normalized;
+    tab.classList.toggle("isActive", isActive);
+    tab.setAttribute("aria-selected", isActive ? "true" : "false");
+    tab.tabIndex = isActive ? 0 : -1;
+  }
+
+  for (const panel of ctx.els.familyDetailPanels) {
+    const isActive = panel.dataset.familyDetailPanel === normalized;
+    panel.classList.toggle("isActive", isActive);
+    panel.hidden = !isActive;
+  }
 }
 
 function renderAllocationChart(ctx, family) {
