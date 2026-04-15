@@ -109,6 +109,12 @@ body {
   font-size: 1.1rem;
 }
 
+.headingWithTip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .panelRow {
   display: flex;
   align-items: center;
@@ -158,6 +164,12 @@ label {
   font-size: 0.95rem;
 }
 
+.fieldTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+}
+
 input,
 select,
 textarea,
@@ -203,6 +215,62 @@ button.danger {
 button.revertBtn {
   padding: 0.36rem 0.55rem;
   font-size: 0.84rem;
+}
+
+.infoTip {
+  appearance: none;
+  width: 1.18rem;
+  height: 1.18rem;
+  border-radius: 999px;
+  border: 1px solid #9bc8b3;
+  background: #effaf4;
+  color: #1c5a3d;
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+  cursor: help;
+  position: relative;
+}
+
+.infoTip:hover,
+.infoTip:focus-visible {
+  filter: none;
+  background: #e2f5eb;
+}
+
+.infoTip:hover::after,
+.infoTip:focus-visible::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 0.42rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(340px, 75vw);
+  border-radius: 8px;
+  background: #153b2a;
+  color: #eafff3;
+  font-size: 0.79rem;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: left;
+  padding: 0.5rem 0.58rem;
+  box-shadow: 0 8px 24px rgba(7, 24, 16, 0.24);
+  z-index: 25;
+  white-space: normal;
+}
+
+.infoTip:hover::before,
+.infoTip:focus-visible::before {
+  content: "";
+  position: absolute;
+  top: calc(100% + 0.1rem);
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 7px solid #153b2a;
+  z-index: 25;
 }
 
 .hint {
@@ -286,6 +354,18 @@ th {
   color: #214233;
 }
 
+.valuationForm {
+  margin-bottom: 0.8rem;
+}
+
+.valuationForm button {
+  margin-bottom: 0.35rem;
+}
+
+.valuationStats {
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+}
+
 @media (max-width: 900px) {
   .grid {
     grid-template-columns: 1fr;
@@ -293,6 +373,10 @@ th {
 
   .stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .valuationStats {
+    grid-template-columns: 1fr;
   }
 }
 

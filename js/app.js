@@ -33,11 +33,15 @@ const els = {
   memberForm: document.getElementById("memberForm"),
   memberName: document.getElementById("memberName"),
   transactionForm: document.getElementById("transactionForm"),
+  valuationForm: document.getElementById("valuationForm"),
   txDate: document.getElementById("txDate"),
   txType: document.getElementById("txType"),
   txMember: document.getElementById("txMember"),
   txAmount: document.getElementById("txAmount"),
   txNote: document.getElementById("txNote"),
+  valuationDate: document.getElementById("valuationDate"),
+  valuationAmount: document.getElementById("valuationAmount"),
+  valuationNote: document.getElementById("valuationNote"),
   txHint: document.getElementById("txHint"),
   memberField: document.getElementById("memberField"),
   amountLabel: document.getElementById("amountLabel"),
@@ -56,6 +60,9 @@ const els = {
   statNav: document.getElementById("statNav"),
   statUnits: document.getElementById("statUnits"),
   statMembers: document.getElementById("statMembers"),
+  valuationPrevious: document.getElementById("valuationPrevious"),
+  valuationDiff: document.getElementById("valuationDiff"),
+  valuationTotalProfit: document.getElementById("valuationTotalProfit"),
 };
 
 let state = createInitialState();
@@ -91,6 +98,7 @@ async function init() {
 function bindEvents() {
   els.memberForm.addEventListener("submit", handleMemberSubmit);
   els.transactionForm.addEventListener("submit", handleTransactionSubmit);
+  els.valuationForm.addEventListener("submit", handleValuationSubmit);
   els.txType.addEventListener("change", updateTxFormFields);
   els.resetData.addEventListener("click", handleReset);
   els.saveNow.addEventListener("click", handleManualSave);
@@ -104,6 +112,9 @@ function bindEvents() {
 function setDefaultDate() {
   if (!els.txDate.value) {
     els.txDate.value = todayISO();
+  }
+  if (!els.valuationDate.value) {
+    els.valuationDate.value = todayISO();
   }
 }
 
@@ -143,8 +154,6 @@ async function handleTransactionSubmit(event) {
       state = applyWithdrawal(state, payload);
     } else if (txType === CONSTANTS.TX_TYPES.PROFIT_LOSS) {
       state = applyProfitLoss(state, payload);
-    } else if (txType === CONSTANTS.TX_TYPES.SET_VALUATION) {
-      state = applySetValuation(state, payload);
     } else {
       throw new Error("Unsupported transaction type.");
     }
@@ -159,6 +168,38 @@ async function handleTransactionSubmit(event) {
     els.txNote.value = "";
     renderAll();
     setStatusWithSaveOutcome(`${TX_LABELS[txType]} recorded.`, saved);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+async function handleValuationSubmit(event) {
+  event.preventDefault();
+
+  const payload = {
+    amount: els.valuationAmount.value,
+    date: els.valuationDate.value || todayISO(),
+    note: els.valuationNote.value,
+  };
+
+  try {
+    const previousPortfolio = state.portfolioCents;
+    state = applySetValuation(state, payload);
+    const diff = state.portfolioCents - previousPortfolio;
+
+    appendChangeRecord(
+      "set_total_value",
+      `Set total value to ${formatCents(state.portfolioCents)} (change ${formatSignedCents(diff)}).`,
+    );
+
+    const saved = await persistState({ manual: false });
+    els.valuationAmount.value = "";
+    els.valuationNote.value = "";
+    renderAll();
+    setStatusWithSaveOutcome(
+      `Total account value updated. Difference: ${formatSignedCents(diff)}.`,
+      saved,
+    );
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -296,6 +337,7 @@ function renderAll() {
   renderOverview();
   renderMemberOptions();
   updateTxFormFields();
+  renderValuationSummary();
   renderMemberTable();
   renderTransactionsTable();
   renderChangesTable();
@@ -347,12 +389,32 @@ function updateTxFormFields() {
     els.txAmount.min = "";
     els.txHint.textContent =
       "Use positive for profit and negative for loss. Units stay unchanged; NAV changes.";
-  } else {
-    els.amountLabel.textContent = "New Portfolio Value";
-    els.txAmount.min = "0";
-    els.txHint.textContent =
-      "Set the broker-reported portfolio total directly. The ledger stores the implied delta.";
   }
+}
+
+function renderValuationSummary() {
+  const setValuationTxs = state.transactions.filter(
+    (tx) => tx.type === CONSTANTS.TX_TYPES.SET_VALUATION,
+  );
+  const latestSet = setValuationTxs.length
+    ? setValuationTxs[setValuationTxs.length - 1]
+    : null;
+
+  let previousTotalCents = state.portfolioCents;
+  let lastDiffCents = 0n;
+  if (latestSet) {
+    lastDiffCents = latestSet.amountCents;
+    if (typeof latestSet.valuationCents === "bigint") {
+      previousTotalCents = latestSet.valuationCents - latestSet.amountCents;
+    }
+  }
+
+  const netCashInCents = getNetCashInCents();
+  const totalProfitCents = state.portfolioCents - netCashInCents;
+
+  els.valuationPrevious.textContent = formatCents(previousTotalCents);
+  els.valuationDiff.textContent = formatSignedCents(lastDiffCents);
+  els.valuationTotalProfit.textContent = formatSignedCents(totalProfitCents);
 }
 
 function renderMemberTable() {
@@ -637,6 +699,16 @@ function attemptCloseCurrentTab() {
   } catch {
     // Browser may block scripted tab close.
   }
+}
+
+function getNetCashInCents() {
+  let totalContributed = 0n;
+  let totalWithdrawn = 0n;
+  for (const member of state.members) {
+    totalContributed += member.totalContributedCents;
+    totalWithdrawn += member.totalWithdrawnCents;
+  }
+  return totalContributed - totalWithdrawn;
 }
 
 function formatCents(cents) {

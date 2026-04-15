@@ -38,7 +38,17 @@
             <strong id="statPortfolio">$0.00</strong>
           </article>
           <article class="stat">
-            <span class="label">NAV Per Unit</span>
+            <span class="label">
+              NAV Per Unit
+              <button
+                type="button"
+                class="infoTip"
+                aria-label="What is NAV per unit?"
+                data-tip="NAV means Net Asset Value per unit. It is the current value of one ownership unit: Portfolio Value divided by Total Units."
+              >
+                ?
+              </button>
+            </span>
             <strong id="statNav">$1.0000</strong>
           </article>
           <article class="stat">
@@ -80,12 +90,21 @@
             </label>
 
             <label>
-              Activity Type
+              <span class="fieldTitle">
+                Activity Type
+                <button
+                  type="button"
+                  class="infoTip"
+                  aria-label="Activity type help"
+                  data-tip="Deposit: cash goes into account and buys units. Withdrawal: cash comes out and redeems units. Profit/Loss: market gain/loss update without cash transfer."
+                >
+                  ?
+                </button>
+              </span>
               <select id="txType" name="txType">
                 <option value="deposit">Deposit (Cash In)</option>
                 <option value="withdrawal">Withdrawal (Cash Out)</option>
                 <option value="profit_loss">Profit / Loss</option>
-                <option value="set_valuation">Set Portfolio Value</option>
               </select>
             </label>
 
@@ -95,7 +114,17 @@
             </label>
 
             <label id="amountField">
-              <span id="amountLabel">Amount</span>
+              <span id="amountLabel" class="fieldTitle">
+                Amount
+                <button
+                  type="button"
+                  class="infoTip"
+                  aria-label="Amount help"
+                  data-tip="Enter the exact cash amount for the selected activity type."
+                >
+                  ?
+                </button>
+              </span>
               <input
                 id="txAmount"
                 name="txAmount"
@@ -125,7 +154,113 @@
       </section>
 
       <section class="panel">
-        <h2>Ownership Snapshot</h2>
+        <h2 class="headingWithTip">
+          Manual Total Account Update
+          <button
+            type="button"
+            class="infoTip"
+            aria-label="Manual total update help"
+            data-tip="Use this when your broker shows a new total account value. The app calculates the difference from the previous value and updates total profit."
+          >
+            ?
+          </button>
+        </h2>
+        <p class="hint">
+          Use this when your broker account changed and you need to manually set
+          the latest total value. The app records the difference and calculates
+          total profit automatically.
+        </p>
+        <form id="valuationForm" class="stack valuationForm">
+          <label>
+            Date
+            <input id="valuationDate" name="valuationDate" type="date" required />
+          </label>
+
+          <label>
+            <span class="fieldTitle">
+              New Total Account Value
+              <button
+                type="button"
+                class="infoTip"
+                aria-label="New total account value help"
+                data-tip="Enter the full current account value from your broker (not the gain amount)."
+              >
+                ?
+              </button>
+            </span>
+            <input
+              id="valuationAmount"
+              name="valuationAmount"
+              type="number"
+              inputmode="decimal"
+              step="0.01"
+              min="0"
+              required
+            />
+          </label>
+
+          <label>
+            Note (Optional)
+            <textarea
+              id="valuationNote"
+              name="valuationNote"
+              rows="2"
+              maxlength="180"
+              placeholder="Broker total update, month-end value, ..."
+            ></textarea>
+          </label>
+
+          <button type="submit">Update Total Value</button>
+        </form>
+
+        <div class="stats valuationStats">
+          <article class="stat">
+            <span class="label">Previous Total</span>
+            <strong id="valuationPrevious">$0.00</strong>
+          </article>
+          <article class="stat">
+            <span class="label">
+              Last Update Difference
+              <button
+                type="button"
+                class="infoTip"
+                aria-label="Last update difference help"
+                data-tip="Difference between the latest manually entered total value and the previous portfolio value."
+              >
+                ?
+              </button>
+            </span>
+            <strong id="valuationDiff">$0.00</strong>
+          </article>
+          <article class="stat">
+            <span class="label">
+              Total Profit
+              <button
+                type="button"
+                class="infoTip"
+                aria-label="Total profit help"
+                data-tip="Total Profit = Current Portfolio Value minus Net Cash In (all deposits minus all withdrawals)."
+              >
+                ?
+              </button>
+            </span>
+            <strong id="valuationTotalProfit">$0.00</strong>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="headingWithTip">
+          Ownership Snapshot
+          <button
+            type="button"
+            class="infoTip"
+            aria-label="Ownership snapshot help"
+            data-tip="Shows each person's current units, ownership percentage, equity value, and net profit/loss based on all recorded activity."
+          >
+            ?
+          </button>
+        </h2>
         <div class="tableWrap">
           <table>
             <thead>
@@ -172,7 +307,17 @@
       </section>
 
       <section class="panel">
-        <h2>App Change History (With Revert)</h2>
+        <h2 class="headingWithTip">
+          App Change History (With Revert)
+          <button
+            type="button"
+            class="infoTip"
+            aria-label="App change history help"
+            data-tip="This is different from transaction history. It tracks app-level snapshots and lets you revert to a previous full state if you made a mistake."
+          >
+            ?
+          </button>
+        </h2>
         <div class="tableWrap">
           <table>
             <thead>
