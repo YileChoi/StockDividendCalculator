@@ -22,13 +22,14 @@ export function renderDoughnutChart({
   if (!(canvas instanceof HTMLCanvasElement)) {
     return;
   }
-  const ctx = canvas.getContext("2d");
+  const prepared = prepareCanvas(canvas);
+  if (!prepared) {
+    return;
+  }
+  const { ctx, width, height } = prepared;
   if (!ctx) {
     return;
   }
-
-  const width = canvas.width;
-  const height = canvas.height;
   ctx.clearRect(0, 0, width, height);
 
   const normalized = normalizeSlices(slices);
@@ -183,4 +184,25 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function prepareCanvas(canvas) {
+  const rect = canvas.getBoundingClientRect();
+  const width = Math.max(1, Math.round(rect.width || canvas.width || 320));
+  const height = Math.max(1, Math.round(rect.height || canvas.height || width));
+  const dpr = Math.max(window.devicePixelRatio || 1, 1);
+  const pixelWidth = Math.max(1, Math.round(width * dpr));
+  const pixelHeight = Math.max(1, Math.round(height * dpr));
+
+  if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+    canvas.width = pixelWidth;
+    canvas.height = pixelHeight;
+  }
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return null;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, width, height };
 }

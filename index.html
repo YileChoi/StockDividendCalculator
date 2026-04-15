@@ -96,7 +96,7 @@
           <div class="chartBlock">
             <canvas
               id="equityDistributionChart"
-              class="chartCanvas"
+              class="chartCanvas doughnutCanvas"
               width="320"
               height="320"
               aria-label="Member equity distribution chart"
@@ -369,152 +369,68 @@
         <p id="statusMessage" class="status" aria-live="polite"></p>
       </section>
 
-      <section id="view-family-dashboard" class="appView" data-view-panel="family-dashboard" hidden>
+      <section
+        id="view-family-dashboard"
+        class="appView"
+        data-view-panel="family-dashboard"
+        hidden
+      >
         <header class="hero heroFamily">
           <h1>Family Investment Dashboard</h1>
           <p>
-            Track each family member's account balances and cost basis separately
-            from the equity dilution calculator.
+            Track multiple families with independent pages, account-level history,
+            and timeline analytics stored in a separate server JSON DB file.
           </p>
           <p class="hint onHero">
-            This section uses independent inputs and independent local data.
+            Family DB file: <code>data/family_dashboard.json</code>
           </p>
         </header>
 
-        <section class="panel">
-          <h2>Dashboard Overview</h2>
-          <div class="stats familyStats">
-            <article class="stat">
-              <span class="label">Total Family Value</span>
-              <strong id="familyStatTotalValue">$0.00</strong>
-            </article>
-            <article class="stat">
-              <span class="label">Total Invested (Cost Basis)</span>
-              <strong id="familyStatTotalInvested">$0.00</strong>
-            </article>
-            <article class="stat">
-              <span class="label">Total Net P/L</span>
-              <strong id="familyStatNet">$0.00</strong>
-            </article>
-            <article class="stat">
-              <span class="label">Tracked Accounts</span>
-              <strong id="familyStatAccountCount">0</strong>
-            </article>
-          </div>
-        </section>
-
-        <section class="grid familyGrid">
+        <section class="grid familyHubGrid">
           <section class="panel">
-            <h2>Add Or Update Account</h2>
-            <form id="familyAccountForm" class="stack">
-              <input id="familyAccountId" type="hidden" />
-
+            <h2>Families</h2>
+            <form id="familyCreateForm" class="stack compactForm">
               <label>
-                Family Member Name
+                Family Name
                 <input
-                  id="familyMemberName"
-                  name="familyMemberName"
-                  type="text"
-                  maxlength="60"
-                  placeholder="e.g. Alex"
-                  required
-                />
-              </label>
-
-              <label>
-                Account Name
-                <input
-                  id="familyAccountName"
-                  name="familyAccountName"
+                  id="familyNameInput"
+                  name="familyNameInput"
                   type="text"
                   maxlength="80"
-                  placeholder="e.g. Brokerage - TFSA"
+                  placeholder="e.g. Choi Family"
                   required
                 />
               </label>
-
-              <label>
-                Current Account Value
-                <input
-                  id="familyCurrentValue"
-                  name="familyCurrentValue"
-                  type="number"
-                  inputmode="decimal"
-                  step="0.01"
-                  min="0"
-                  required
-                />
-              </label>
-
-              <label>
-                Invested Amount (Cost Basis)
-                <input
-                  id="familyInvestedValue"
-                  name="familyInvestedValue"
-                  type="number"
-                  inputmode="decimal"
-                  step="0.01"
-                  min="0"
-                  required
-                />
-              </label>
-
-              <label>
-                Note (Optional)
-                <textarea
-                  id="familyAccountNote"
-                  name="familyAccountNote"
-                  rows="2"
-                  maxlength="180"
-                  placeholder="Broker, strategy, or comments..."
-                ></textarea>
-              </label>
-
-              <div class="inlineActions">
-                <button id="familySaveAccount" type="submit">Save Account</button>
-                <button id="familyCancelEdit" type="button" class="ghostBtn" hidden>
-                  Cancel Edit
-                </button>
-              </div>
+              <button id="familyCreateBtn" type="submit">Create Family</button>
             </form>
-            <p id="familyFormHint" class="hint">
-              Each account stores current value and cost basis so individual and
-              family-level profit/loss can be tracked.
-            </p>
+            <div class="tableWrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Family</th>
+                    <th>Members</th>
+                    <th>Accounts</th>
+                    <th>Total Value</th>
+                    <th>Open</th>
+                  </tr>
+                </thead>
+                <tbody id="familyTableBody"></tbody>
+              </table>
+            </div>
+            <p id="familyHubStatus" class="status" aria-live="polite"></p>
           </section>
 
           <section class="panel">
-            <h2>Family Allocation (Doughnut)</h2>
+            <h2>Family DB Controls</h2>
             <p class="hint">
-              Sum of all individual account values grouped by family member.
+              Export/import controls are separate from the stock dilution
+              calculator DB.
             </p>
-            <div class="chartBlock">
-              <canvas
-                id="familyAllocationChart"
-                class="chartCanvas"
-                width="320"
-                height="320"
-                aria-label="Family allocation doughnut chart"
-                role="img"
-              ></canvas>
-              <ul id="familyAllocationLegend" class="chartLegend"></ul>
-            </div>
-          </section>
-        </section>
-
-        <section class="panel">
-          <h2>Member Profit/Loss Summary</h2>
-          <div id="familyMemberCards" class="memberCards"></div>
-        </section>
-
-        <section class="panel">
-          <div class="panelRow">
-            <h2>Tracked Accounts</h2>
             <div class="inlineActions">
-              <button id="familyExport" type="button">Export</button>
-              <button id="familyImport" type="button">Import</button>
-              <button id="familyReset" type="button" class="danger subtleDanger">
-                Reset
+              <button id="familyExport" type="button">Export Family DB</button>
+              <button id="familyImport" type="button">Import Family DB</button>
+              <button id="familyResetDb" type="button" class="danger subtleDanger">
+                Reset Family DB
               </button>
               <input
                 id="familyImportFile"
@@ -523,24 +439,271 @@
                 hidden
               />
             </div>
-          </div>
+            <p id="familyDbState" class="hint">Family DB: connecting...</p>
+          </section>
+        </section>
 
-          <div class="tableWrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Member</th>
-                  <th>Account</th>
-                  <th>Current Value</th>
-                  <th>Invested</th>
-                  <th>Net P/L</th>
-                  <th>Note</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="familyAccountsTableBody"></tbody>
-            </table>
-          </div>
+        <section id="familyDetailEmpty" class="panel">
+          <h2>No Family Selected</h2>
+          <p class="hint">
+            Create or open a family above to access the individual family page with
+            account details, timeline logs, and value trend chart.
+          </p>
+        </section>
+
+        <section id="familyDetailPage" class="appView" hidden>
+          <section class="panel">
+            <div class="panelRow">
+              <h2 id="familySelectedTitle">Family Details</h2>
+              <div class="inlineActions">
+                <button
+                  id="familyDeleteSelected"
+                  type="button"
+                  class="danger subtleDanger"
+                >
+                  Delete This Family
+                </button>
+              </div>
+            </div>
+            <p class="hint">
+              This page is specific to one family and records all investment
+              changes with timestamps.
+            </p>
+            <div class="stats familyStats">
+              <article class="stat">
+                <span class="label">Total Family Value</span>
+                <strong id="familyStatTotalValue">$0.00</strong>
+              </article>
+              <article class="stat">
+                <span class="label">Total Invested (Cost Basis)</span>
+                <strong id="familyStatTotalInvested">$0.00</strong>
+              </article>
+              <article class="stat">
+                <span class="label">Total Net P/L</span>
+                <strong id="familyStatNet">$0.00</strong>
+              </article>
+              <article class="stat">
+                <span class="label">Tracked Accounts</span>
+                <strong id="familyStatAccountCount">0</strong>
+              </article>
+            </div>
+          </section>
+
+          <section class="grid familyGrid">
+            <section class="panel">
+              <h2>Family Allocation (Doughnut)</h2>
+              <p class="hint">
+                Sum of current values grouped by family member.
+              </p>
+              <div class="chartBlock">
+                <canvas
+                  id="familyAllocationChart"
+                  class="chartCanvas doughnutCanvas"
+                  width="320"
+                  height="320"
+                  aria-label="Family allocation doughnut chart"
+                  role="img"
+                ></canvas>
+                <ul id="familyAllocationLegend" class="chartLegend"></ul>
+              </div>
+            </section>
+
+            <section class="panel">
+              <h2>Account Value Trend (Line)</h2>
+              <label>
+                Account For Trend
+                <select id="familyTrendAccountSelect"></select>
+              </label>
+              <canvas
+                id="familyTrendChart"
+                class="chartCanvas lineChartCanvas"
+                width="420"
+                height="280"
+                aria-label="Account value trend chart"
+                role="img"
+              ></canvas>
+              <p id="familyTrendMeta" class="hint"></p>
+            </section>
+          </section>
+
+          <section class="grid familyOpsGrid">
+            <section class="panel">
+              <h2>Add Account</h2>
+              <form id="familyAccountForm" class="stack">
+                <label>
+                  Family Member Name
+                  <input
+                    id="familyMemberName"
+                    name="familyMemberName"
+                    type="text"
+                    maxlength="60"
+                    placeholder="e.g. Alex"
+                    required
+                  />
+                </label>
+
+                <label>
+                  Account Name
+                  <input
+                    id="familyAccountName"
+                    name="familyAccountName"
+                    type="text"
+                    maxlength="80"
+                    placeholder="e.g. Brokerage - TFSA"
+                    required
+                  />
+                </label>
+
+                <label>
+                  Initial Current Value
+                  <input
+                    id="familyCurrentValue"
+                    name="familyCurrentValue"
+                    type="number"
+                    inputmode="decimal"
+                    step="0.01"
+                    min="0"
+                    required
+                  />
+                </label>
+
+                <label>
+                  Initial Invested Amount
+                  <input
+                    id="familyInvestedValue"
+                    name="familyInvestedValue"
+                    type="number"
+                    inputmode="decimal"
+                    step="0.01"
+                    min="0"
+                    required
+                  />
+                </label>
+
+                <label>
+                  Effective Date
+                  <input id="familyAccountDate" name="familyAccountDate" type="date" required />
+                </label>
+
+                <label>
+                  Note (Optional)
+                  <textarea
+                    id="familyAccountNote"
+                    name="familyAccountNote"
+                    rows="2"
+                    maxlength="180"
+                    placeholder="Broker, strategy, or comments..."
+                  ></textarea>
+                </label>
+
+                <button id="familySaveAccount" type="submit">Add Account</button>
+              </form>
+            </section>
+
+            <section class="panel">
+              <h2>Record Investment Change</h2>
+              <form id="familyChangeForm" class="stack">
+                <label>
+                  Date
+                  <input id="familyChangeDate" name="familyChangeDate" type="date" required />
+                </label>
+
+                <label>
+                  Account
+                  <select id="familyChangeAccount" name="familyChangeAccount" required></select>
+                </label>
+
+                <label>
+                  Current Value Change (+/-)
+                  <input
+                    id="familyCurrentDelta"
+                    name="familyCurrentDelta"
+                    type="number"
+                    inputmode="decimal"
+                    step="0.01"
+                    required
+                  />
+                </label>
+
+                <label>
+                  Invested Amount Change (+/-)
+                  <input
+                    id="familyInvestedDelta"
+                    name="familyInvestedDelta"
+                    type="number"
+                    inputmode="decimal"
+                    step="0.01"
+                    required
+                  />
+                </label>
+
+                <label>
+                  Note (Optional)
+                  <textarea
+                    id="familyChangeNote"
+                    name="familyChangeNote"
+                    rows="2"
+                    maxlength="180"
+                    placeholder="Additional invest, drawdown, market move, ..."
+                  ></textarea>
+                </label>
+
+                <button id="familyApplyChange" type="submit">Record Change</button>
+              </form>
+              <p class="hint">
+                Use positive or negative values. Positive invested change means new
+                capital added; negative means invested capital reduced.
+              </p>
+            </section>
+          </section>
+
+          <section class="panel">
+            <h2>Member Profit/Loss Summary</h2>
+            <div id="familyMemberCards" class="memberCards"></div>
+          </section>
+
+          <section class="panel">
+            <h2>Tracked Accounts</h2>
+            <div class="tableWrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Member</th>
+                    <th>Account</th>
+                    <th>Current Value</th>
+                    <th>Invested</th>
+                    <th>Net P/L</th>
+                    <th>Last Updated</th>
+                    <th>Note</th>
+                  </tr>
+                </thead>
+                <tbody id="familyAccountsTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel">
+            <h2>Investment Change History</h2>
+            <div class="tableWrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Recorded At</th>
+                    <th>Type</th>
+                    <th>Member</th>
+                    <th>Account</th>
+                    <th>Current Δ</th>
+                    <th>Invested Δ</th>
+                    <th>Current After</th>
+                    <th>Invested After</th>
+                    <th>Note</th>
+                  </tr>
+                </thead>
+                <tbody id="familyEventsTableBody"></tbody>
+              </table>
+            </div>
+          </section>
 
           <p id="familyStatusMessage" class="status" aria-live="polite"></p>
         </section>

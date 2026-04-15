@@ -168,8 +168,11 @@ function setActiveView(view, { updateHash }) {
 }
 
 function sanitizeView(value) {
-  if (value === "calculator" || value === "family-dashboard") {
+  if (value === "calculator") {
     return value;
+  }
+  if (typeof value === "string" && value.startsWith("family-dashboard")) {
+    return "family-dashboard";
   }
   return "";
 }

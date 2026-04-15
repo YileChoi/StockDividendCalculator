@@ -374,28 +374,39 @@ button.revertBtn {
 
 .chartBlock {
   display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(200px, 1fr);
-  align-items: center;
-  gap: 1rem;
+  justify-items: center;
+  gap: 0.8rem;
 }
 
 .chartCanvas {
-  width: 100%;
-  max-width: 320px;
+  width: min(440px, 100%);
   height: auto;
   margin: 0 auto;
-  background: radial-gradient(circle at 30% 20%, #fbfffd 0%, #f2faf6 100%);
+}
+
+.doughnutCanvas {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+.lineChartCanvas {
+  background: #fbfefc;
   border: 1px solid #dbe8df;
-  border-radius: 14px;
-  padding: 0.5rem;
+  border-radius: 12px;
+  padding: 0.35rem;
 }
 
 .chartLegend {
   list-style: none;
-  margin: 0;
+  margin: 0.2rem 0 0;
   padding: 0;
   display: grid;
+  grid-template-columns: repeat(2, minmax(190px, 1fr));
   gap: 0.5rem;
+  width: 100%;
+  max-width: 760px;
 }
 
 .chartLegendItem {
@@ -431,8 +442,20 @@ button.revertBtn {
   grid-template-columns: repeat(4, minmax(140px, 1fr));
 }
 
+.familyHubGrid {
+  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+}
+
 .familyGrid {
   grid-template-columns: minmax(360px, 1.1fr) minmax(280px, 0.9fr);
+}
+
+.familyOpsGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.compactForm {
+  margin-bottom: 0.8rem;
 }
 
 .memberCards {
@@ -578,6 +601,14 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .familyHubGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .familyOpsGrid {
+    grid-template-columns: 1fr;
+  }
+
   .memberCards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -587,6 +618,10 @@ th {
   }
 
   .chartBlock {
+    grid-template-columns: 1fr;
+  }
+
+  .chartLegend {
     grid-template-columns: 1fr;
   }
 }
