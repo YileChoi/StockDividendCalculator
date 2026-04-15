@@ -12,7 +12,7 @@ const NETWORK_TIMEOUT_MS = 8000;
 const DEFAULT_FAMILY_NAME = "My Family";
 
 const ACTIVITY_LABELS = {
-  account_created: "Account Added",
+  account_created: "Account Opened",
   account_removed: "Account Removed",
   deposit: "Deposit",
   withdrawal: "Withdrawal",
@@ -89,14 +89,10 @@ function collectElements() {
     familyStatAccountCount: document.getElementById("familyStatAccountCount"),
 
     familyAllocationChart: document.getElementById("familyAllocationChart"),
-    familyAllocationLegend: document.getElementById("familyAllocationLegend"),
 
     familyAccountForm: document.getElementById("familyAccountForm"),
     familyMemberName: document.getElementById("familyMemberName"),
     familyAccountName: document.getElementById("familyAccountName"),
-    familyCurrentValue: document.getElementById("familyCurrentValue"),
-    familyInvestedValue: document.getElementById("familyInvestedValue"),
-    familyAccountDate: document.getElementById("familyAccountDate"),
     familyAccountNote: document.getElementById("familyAccountNote"),
 
     familyMemberCards: document.getElementById("familyMemberCards"),
@@ -112,9 +108,6 @@ function collectElements() {
     ),
     familyMemberAllocationChart: document.getElementById(
       "familyMemberAllocationChart",
-    ),
-    familyMemberAllocationLegend: document.getElementById(
-      "familyMemberAllocationLegend",
     ),
     familyMemberTrendChart: document.getElementById("familyMemberTrendChart"),
     familyMemberTrendMeta: document.getElementById("familyMemberTrendMeta"),
@@ -201,9 +194,6 @@ function bindEvents(ctx) {
 
 function setDefaultDates(els) {
   const today = todayISO();
-  if (els.familyAccountDate && !els.familyAccountDate.value) {
-    els.familyAccountDate.value = today;
-  }
   if (els.familyChangeDate && !els.familyChangeDate.value) {
     els.familyChangeDate.value = today;
   }
@@ -274,15 +264,7 @@ async function handleAddAccount(ctx, event) {
     const payload = {
       memberName: sanitizeText(ctx.els.familyMemberName.value, 60),
       accountName: sanitizeText(ctx.els.familyAccountName.value, 80),
-      currentCents: parseUnsignedCents(
-        ctx.els.familyCurrentValue.value,
-        "Initial current value",
-      ),
-      investedCents: parseUnsignedCents(
-        ctx.els.familyInvestedValue.value,
-        "Initial invested amount",
-      ),
-      date: normalizeDate(ctx.els.familyAccountDate.value || todayISO()),
+      date: todayISO(),
       note: sanitizeText(ctx.els.familyAccountNote.value, 180),
     };
 
@@ -308,8 +290,8 @@ async function handleAddAccount(ctx, event) {
       id: family.nextAccountId,
       memberName: payload.memberName,
       accountName: payload.accountName,
-      currentCents: payload.currentCents,
-      investedCents: payload.investedCents,
+      currentCents: 0,
+      investedCents: 0,
       note: payload.note,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -324,11 +306,11 @@ async function handleAddAccount(ctx, event) {
       memberName: account.memberName,
       accountId: account.id,
       accountName: account.accountName,
-      currentDeltaCents: account.currentCents,
-      investedDeltaCents: account.investedCents,
+      currentDeltaCents: 0,
+      investedDeltaCents: 0,
       currentAfterCents: account.currentCents,
       investedAfterCents: account.investedCents,
-      note: payload.note || "Account created.",
+      note: payload.note || "Account opened.",
     });
 
     family.updatedAt = new Date().toISOString();
@@ -338,9 +320,11 @@ async function handleAddAccount(ctx, event) {
     }
 
     ctx.els.familyAccountForm.reset();
-    ctx.els.familyAccountDate.value = todayISO();
     renderAll(ctx);
-    setHubStatus(ctx.els, "Account added.");
+    setHubStatus(
+      ctx.els,
+      `Account opened for ${account.memberName}. Open details to record deposits and value changes.`,
+    );
   } catch (error) {
     setHubStatus(ctx.els, error.message, true);
   }
@@ -701,7 +685,6 @@ function renderFamilyAllocationChart(ctx, family) {
 
   renderDoughnutChart({
     canvas: ctx.els.familyAllocationChart,
-    legendEl: ctx.els.familyAllocationLegend,
     slices,
     emptyLabel: "Add accounts to build family allocation.",
     centerLabel: "Family Total",
@@ -727,12 +710,23 @@ function renderMemberCards(ctx, family) {
             : "";
       const encodedMember = encodeURIComponent(member.memberName);
 
-      return `<button type="button" class="memberCardButton" data-member-open="${encodedMember}">
-        <h3>${escapeHtml(member.memberName)}</h3>
-        <div class="meta">${member.accountCount} account${member.accountCount === 1 ? "" : "s"}</div>
-        <div>Current Value: <strong>${formatCents(member.currentCents)}</strong></div>
-        <div>Invested: <strong>${formatCents(member.investedCents)}</strong></div>
-        <div>Net P/L: <strong class="${netClass}">${formatSignedCents(member.netCents)}</strong></div>
+      return `<button type="button" class="memberCardButton" data-member-open="${encodedMember}" aria-label="Open ${escapeHtml(member.memberName)} member details">
+        <div class="memberCardHeader">
+          <h3 class="memberCardTitle">${escapeHtml(member.memberName)}</h3>
+          <span class="meta memberCardCount">${member.accountCount} account${member.accountCount === 1 ? "" : "s"}</span>
+        </div>
+        <div class="memberCardMetric">
+          <span>Current Value</span>
+          <strong>${formatCents(member.currentCents)}</strong>
+        </div>
+        <div class="memberCardMetric">
+          <span>Invested</span>
+          <strong>${formatCents(member.investedCents)}</strong>
+        </div>
+        <div class="memberCardMetric">
+          <span>Net P/L</span>
+          <strong class="${netClass}">${formatSignedCents(member.netCents)}</strong>
+        </div>
       </button>`;
     })
     .join("");
@@ -798,7 +792,6 @@ function renderMemberAllocationChart(ctx, accounts, memberName, totalCurrentCent
 
   renderDoughnutChart({
     canvas: ctx.els.familyMemberAllocationChart,
-    legendEl: ctx.els.familyMemberAllocationLegend,
     slices,
     emptyLabel: `Add accounts for ${memberName} to build allocation.`,
     centerLabel: "Member Total",

@@ -147,8 +147,8 @@ function drawEmptyState(ctx, width, height, emptyLabel) {
 
 function prepareCanvas(canvas) {
   const rect = canvas.getBoundingClientRect();
-  const attrWidth = Number(canvas.getAttribute("width")) || 420;
-  const attrHeight = Number(canvas.getAttribute("height")) || 280;
+  const attrWidth = getBaseCanvasDimension(canvas, "width", 420);
+  const attrHeight = getBaseCanvasDimension(canvas, "height", 280);
   const width = Math.max(1, Math.round(rect.width || canvas.clientWidth || attrWidth));
   const height = Math.max(
     1,
@@ -169,4 +169,15 @@ function prepareCanvas(canvas) {
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   return { ctx, width, height };
+}
+
+function getBaseCanvasDimension(canvas, axis, fallback) {
+  const dataKey = axis === "width" ? "baseWidth" : "baseHeight";
+  if (!canvas.dataset[dataKey]) {
+    const initial = Number(canvas.getAttribute(axis));
+    canvas.dataset[dataKey] =
+      Number.isFinite(initial) && initial > 0 ? String(initial) : String(fallback);
+  }
+  const parsed = Number(canvas.dataset[dataKey]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }

@@ -65,7 +65,6 @@ const els = {
   statUnits: document.getElementById("statUnits"),
   statMembers: document.getElementById("statMembers"),
   equityDistributionChart: document.getElementById("equityDistributionChart"),
-  equityDistributionLegend: document.getElementById("equityDistributionLegend"),
   valuationPrevious: document.getElementById("valuationPrevious"),
   valuationDiff: document.getElementById("valuationDiff"),
   valuationTotalProfit: document.getElementById("valuationTotalProfit"),
@@ -538,7 +537,6 @@ function renderEquityDistributionChart() {
 
   renderDoughnutChart({
     canvas: els.equityDistributionChart,
-    legendEl: els.equityDistributionLegend,
     slices,
     emptyLabel: "Add members and deposits to view distribution.",
     centerLabel: "Total Equity",

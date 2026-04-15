@@ -174,6 +174,15 @@ body {
   justify-content: space-between;
   gap: 0.7rem;
   flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.panelRow > h2 {
+  margin: 0;
+}
+
+.panelRow > .inlineActions {
+  margin-left: auto;
 }
 
 .stats {
@@ -404,10 +413,53 @@ button.revertBtn {
 }
 
 .doughnutCanvas {
+  width: min(620px, 100%);
   background: transparent;
   border: none;
   border-radius: 0;
   padding: 0;
+}
+
+.doughnutHoverTip {
+  position: fixed;
+  z-index: 80;
+  min-width: 150px;
+  max-width: min(280px, calc(100vw - 16px));
+  border-radius: 8px;
+  border: 1px solid #2b6247;
+  background: #153b2a;
+  color: #eafff3;
+  padding: 0.44rem 0.54rem;
+  font-size: 0.81rem;
+  line-height: 1.35;
+  pointer-events: none;
+  box-shadow: 0 10px 26px rgba(7, 24, 16, 0.27);
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 80ms linear;
+}
+
+.doughnutHoverTip.isVisible {
+  visibility: visible;
+  opacity: 1;
+}
+
+.doughnutHoverTipTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.16rem;
+}
+
+.doughnutHoverSwatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.doughnutHoverTipMeta {
+  color: #d8f8e8;
 }
 
 .lineChartCanvas {
@@ -497,7 +549,7 @@ button.revertBtn {
 
 .memberCards {
   display: grid;
-  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 0.75rem;
 }
 
@@ -526,11 +578,12 @@ button.revertBtn {
   text-align: left;
   border: 1px solid #d9e7df;
   border-radius: 11px;
-  padding: 0.75rem;
+  padding: 0.58rem 0.72rem 0.68rem;
   background: #fbfefc;
   color: inherit;
   display: grid;
-  gap: 0.32rem;
+  gap: 0.44rem;
+  align-content: start;
 }
 
 .memberCardButton:hover {
@@ -542,6 +595,42 @@ button.revertBtn {
 .memberCardButton:focus-visible {
   outline: 2px solid #6cb68f;
   outline-offset: 2px;
+}
+
+.memberCardHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+
+.memberCardTitle {
+  margin: 0;
+  font-size: 1rem;
+  color: #234438;
+  line-height: 1.25;
+}
+
+.memberCardCount {
+  white-space: nowrap;
+}
+
+.memberCardMetric {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  border-top: 1px solid #e3ede6;
+  padding-top: 0.36rem;
+}
+
+.memberCardMetric span {
+  color: #547063;
+  font-size: 0.86rem;
+}
+
+.memberCardMetric strong {
+  font-size: 0.95rem;
 }
 
 .valuePositive {
@@ -685,10 +774,6 @@ th {
     grid-template-columns: 1fr;
   }
 
-  .memberCards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .valuationStats {
     grid-template-columns: 1fr;
   }
@@ -721,10 +806,6 @@ th {
 
   .panel {
     padding: 0.85rem;
-  }
-
-  .memberCards {
-    grid-template-columns: 1fr;
   }
 
   .familyTrendCanvas {
