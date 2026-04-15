@@ -1,4 +1,3 @@
-import { renderDoughnutChart } from "./doughnut.js";
 import { renderLineChart } from "./lineChart.js";
 
 const API = {
@@ -9,22 +8,32 @@ const API = {
 
 const SCHEMA_VERSION = 1;
 const NETWORK_TIMEOUT_MS = 8000;
+const DEFAULT_FAMILY_NAME = "My Family";
+
+const ACTIVITY_LABELS = {
+  account_created: "Account Added",
+  account_removed: "Account Removed",
+  deposit: "Deposit",
+  withdrawal: "Withdrawal",
+  set_value: "Set Current Value",
+};
 
 export function initFamilyDashboard() {
   const els = collectElements();
-  if (!els.familyCreateForm) {
+  if (!els.familyProfileForm) {
     return;
   }
 
   const ctx = {
     els,
     db: createInitialDb(),
-    activeFamilyId: null,
-    activeDetailView: "overview",
+    activePage: "dashboard",
+    activeAccountId: null,
   };
 
   bindEvents(ctx);
   setDefaultDates(els);
+  updateChangeFormFields(ctx);
   void init(ctx);
 }
 
@@ -32,6 +41,12 @@ async function init(ctx) {
   setDbState(ctx.els, "Family DB: connecting...");
   const loaded = await loadDbFromServer();
   ctx.db = loaded.db;
+
+  const primary = ensurePrimaryFamily(ctx.db);
+  if (primary.created) {
+    await persistDb(ctx, { endpoint: API.db });
+  }
+
   setDbState(
     ctx.els,
     loaded.connected
@@ -39,28 +54,21 @@ async function init(ctx) {
       : "Family DB: offline (in-memory fallback)",
   );
 
-  const hashFamilyId = parseFamilyIdFromHash(window.location.hash);
-  if (hashFamilyId !== null && findFamily(ctx.db, hashFamilyId)) {
-    ctx.activeFamilyId = hashFamilyId;
-  } else if (ctx.db.state.families.length > 0) {
-    ctx.activeFamilyId = ctx.db.state.families[0].id;
+  if (ctx.db.state.families.length > 1) {
+    setHubStatus(
+      ctx.els,
+      "Multiple families were found in DB. This dashboard uses the first family profile only.",
+    );
   }
 
-  if (
-    ctx.activeFamilyId !== null &&
-    typeof window.location.hash === "string" &&
-    window.location.hash.startsWith("#family-dashboard")
-  ) {
-    setFamilyHash(ctx.activeFamilyId);
-  }
+  syncPageFromHash(ctx);
   renderAll(ctx);
 }
 
 function collectElements() {
   return {
-    familyCreateForm: document.getElementById("familyCreateForm"),
+    familyProfileForm: document.getElementById("familyProfileForm"),
     familyNameInput: document.getElementById("familyNameInput"),
-    familyTableBody: document.getElementById("familyTableBody"),
     familyHubStatus: document.getElementById("familyHubStatus"),
     familyExport: document.getElementById("familyExport"),
     familyImport: document.getElementById("familyImport"),
@@ -68,28 +76,14 @@ function collectElements() {
     familyImportFile: document.getElementById("familyImportFile"),
     familyDbState: document.getElementById("familyDbState"),
 
-    familyDetailEmpty: document.getElementById("familyDetailEmpty"),
-    familyDetailPage: document.getElementById("familyDetailPage"),
-    familySelectedTitle: document.getElementById("familySelectedTitle"),
-    familyDeleteSelected: document.getElementById("familyDeleteSelected"),
-    familyDetailTabs: Array.from(
-      document.querySelectorAll(".detailTab[data-family-detail-view]"),
-    ),
-    familyDetailPanels: Array.from(
-      document.querySelectorAll("[data-family-detail-panel]"),
-    ),
+    familyDashboardPage: document.getElementById("familyDashboardPage"),
+    familyAccountDetailPage: document.getElementById("familyAccountDetailPage"),
 
+    familySelectedTitle: document.getElementById("familySelectedTitle"),
     familyStatTotalValue: document.getElementById("familyStatTotalValue"),
     familyStatTotalInvested: document.getElementById("familyStatTotalInvested"),
     familyStatNet: document.getElementById("familyStatNet"),
     familyStatAccountCount: document.getElementById("familyStatAccountCount"),
-
-    familyAllocationChart: document.getElementById("familyAllocationChart"),
-    familyAllocationLegend: document.getElementById("familyAllocationLegend"),
-
-    familyTrendAccountSelect: document.getElementById("familyTrendAccountSelect"),
-    familyTrendChart: document.getElementById("familyTrendChart"),
-    familyTrendMeta: document.getElementById("familyTrendMeta"),
 
     familyAccountForm: document.getElementById("familyAccountForm"),
     familyMemberName: document.getElementById("familyMemberName"),
@@ -99,30 +93,36 @@ function collectElements() {
     familyAccountDate: document.getElementById("familyAccountDate"),
     familyAccountNote: document.getElementById("familyAccountNote"),
 
-    familyChangeForm: document.getElementById("familyChangeForm"),
-    familyChangeDate: document.getElementById("familyChangeDate"),
-    familyChangeAccount: document.getElementById("familyChangeAccount"),
-    familyCurrentDelta: document.getElementById("familyCurrentDelta"),
-    familyInvestedDelta: document.getElementById("familyInvestedDelta"),
-    familyChangeNote: document.getElementById("familyChangeNote"),
-
     familyMemberCards: document.getElementById("familyMemberCards"),
     familyAccountsTableBody: document.getElementById("familyAccountsTableBody"),
+
+    familyBackToDashboard: document.getElementById("familyBackToDashboard"),
+    familyAccountDetailTitle: document.getElementById("familyAccountDetailTitle"),
+    familyAccountCurrentValue: document.getElementById("familyAccountCurrentValue"),
+    familyAccountInvestedValue: document.getElementById("familyAccountInvestedValue"),
+    familyAccountNetValue: document.getElementById("familyAccountNetValue"),
+
+    familyChangeForm: document.getElementById("familyChangeForm"),
+    familyChangeDate: document.getElementById("familyChangeDate"),
+    familyChangeType: document.getElementById("familyChangeType"),
+    familyChangeAmount: document.getElementById("familyChangeAmount"),
+    familyChangeAmountLabel: document.getElementById("familyChangeAmountLabel"),
+    familyChangeNote: document.getElementById("familyChangeNote"),
+    familyChangeHint: document.getElementById("familyChangeHint"),
+
+    familyTrendChart: document.getElementById("familyTrendChart"),
+    familyTrendMeta: document.getElementById("familyTrendMeta"),
     familyEventsTableBody: document.getElementById("familyEventsTableBody"),
+
     familyStatusMessage: document.getElementById("familyStatusMessage"),
   };
 }
 
 function bindEvents(ctx) {
   const { els } = ctx;
-  els.familyCreateForm.addEventListener("submit", (event) =>
-    handleCreateFamily(ctx, event),
-  );
-  els.familyTableBody.addEventListener("click", (event) =>
-    handleFamilyTableClick(ctx, event),
-  );
-  els.familyDeleteSelected.addEventListener("click", () =>
-    handleDeleteSelectedFamily(ctx),
+
+  els.familyProfileForm.addEventListener("submit", (event) =>
+    handleSaveFamilyProfile(ctx, event),
   );
 
   els.familyExport.addEventListener("click", () => handleExportFamilyDb(ctx));
@@ -138,19 +138,20 @@ function bindEvents(ctx) {
   els.familyAccountForm.addEventListener("submit", (event) =>
     handleAddAccount(ctx, event),
   );
+  els.familyAccountsTableBody.addEventListener("click", (event) =>
+    handleAccountsTableClick(ctx, event),
+  );
+
+  els.familyBackToDashboard.addEventListener("click", () => {
+    openDashboardPage(ctx, { updateHash: true });
+    renderAll(ctx);
+  });
+
+  els.familyChangeType.addEventListener("change", () => {
+    updateChangeFormFields(ctx);
+  });
   els.familyChangeForm.addEventListener("submit", (event) =>
     handleRecordChange(ctx, event),
-  );
-  els.familyTrendAccountSelect.addEventListener("change", () =>
-    renderTrendChart(ctx),
-  );
-  els.familyDetailTabs.forEach((tab) =>
-    tab.addEventListener("click", (event) => handleDetailTabClick(ctx, event)),
-  );
-  els.familyDetailTabs.forEach((tab) =>
-    tab.addEventListener("keydown", (event) =>
-      handleDetailTabKeydown(ctx, event),
-    ),
   );
 
   window.addEventListener("hashchange", () => handleHashChange(ctx));
@@ -166,161 +167,63 @@ function setDefaultDates(els) {
   }
 }
 
-async function handleCreateFamily(ctx, event) {
+function updateChangeFormFields(ctx) {
+  const type = ctx.els.familyChangeType.value;
+  if (type === "deposit") {
+    ctx.els.familyChangeAmountLabel.textContent = "Amount To Add";
+    ctx.els.familyChangeHint.textContent =
+      "Deposit adds money into the account and increases both current value and invested amount.";
+    ctx.els.familyChangeAmount.min = "0.01";
+    return;
+  }
+
+  if (type === "withdrawal") {
+    ctx.els.familyChangeAmountLabel.textContent = "Amount To Withdraw";
+    ctx.els.familyChangeHint.textContent =
+      "Withdrawal takes money out of the account and reduces both current value and invested amount.";
+    ctx.els.familyChangeAmount.min = "0.01";
+    return;
+  }
+
+  ctx.els.familyChangeAmountLabel.textContent = "New Current Account Value";
+  ctx.els.familyChangeHint.textContent =
+    "Set Current Value updates only current value (invested amount stays the same).";
+  ctx.els.familyChangeAmount.min = "0";
+}
+
+async function handleSaveFamilyProfile(ctx, event) {
   event.preventDefault();
+  const family = getPrimaryFamily(ctx.db);
+  if (!family) {
+    setHubStatus(ctx.els, "Family profile is unavailable.", true);
+    return;
+  }
+
   try {
     const name = sanitizeText(ctx.els.familyNameInput.value, 80);
     if (!name) {
       throw new Error("Family name is required.");
     }
-    const duplicate = ctx.db.state.families.find(
-      (family) => family.name.toLowerCase() === name.toLowerCase(),
-    );
-    if (duplicate) {
-      throw new Error(`"${name}" already exists.`);
-    }
-
-    const family = {
-      id: ctx.db.state.nextFamilyId,
-      name,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      nextAccountId: 1,
-      nextEventId: 1,
-      accounts: [],
-      events: [],
-    };
-    ctx.db.state.families.push(family);
-    ctx.db.state.nextFamilyId += 1;
-    ctx.activeFamilyId = family.id;
+    family.name = name;
+    family.updatedAt = new Date().toISOString();
 
     const saved = await persistDb(ctx, { endpoint: API.db });
     if (!saved) {
-      throw new Error("Could not save family DB.");
+      throw new Error("Could not save family profile.");
     }
 
-    ctx.els.familyNameInput.value = "";
-    ctx.activeDetailView = "overview";
-    setFamilyHash(family.id);
     renderAll(ctx);
-    setHubStatus(ctx.els, `Family "${name}" added.`);
+    setHubStatus(ctx.els, "Family name saved.");
   } catch (error) {
     setHubStatus(ctx.els, error.message, true);
   }
 }
 
-function handleFamilyTableClick(ctx, event) {
-  const openBtn = event.target.closest("button[data-family-open]");
-  if (openBtn) {
-    const familyId = toPositiveInt(openBtn.dataset.familyOpen, null);
-    if (familyId !== null && findFamily(ctx.db, familyId)) {
-      ctx.activeFamilyId = familyId;
-      ctx.activeDetailView = "overview";
-      setFamilyHash(familyId);
-      renderAll(ctx);
-      setHubStatus(ctx.els, "Opened family details.");
-    }
-  }
-}
-
-async function handleDeleteSelectedFamily(ctx) {
-  const family = getActiveFamily(ctx);
-  if (!family) {
-    return;
-  }
-
-  const confirmed = window.confirm(
-    `Delete family "${family.name}" and all its accounts/history?`,
-  );
-  if (!confirmed) {
-    return;
-  }
-
-  ctx.db.state.families = ctx.db.state.families.filter((item) => item.id !== family.id);
-  ctx.activeFamilyId = ctx.db.state.families.length
-    ? ctx.db.state.families[0].id
-    : null;
-
-  const saved = await persistDb(ctx, { endpoint: API.db });
-  if (!saved) {
-    setFamilyStatus(ctx.els, "Could not save family DB after delete.", true);
-    return;
-  }
-
-  if (ctx.activeFamilyId !== null) {
-    setFamilyHash(ctx.activeFamilyId);
-  } else {
-    setFamilyHash(null);
-  }
-  renderAll(ctx);
-  setHubStatus(ctx.els, "Family deleted.");
-}
-
-function handleExportFamilyDb(ctx) {
-  setHubStatus(ctx.els, "Downloading family dashboard DB...");
-  window.location.href = API.export;
-}
-
-async function handleImportFamilyDb(ctx, event) {
-  const file = event.target.files?.[0];
-  if (!file) {
-    return;
-  }
-
-  try {
-    const parsed = JSON.parse(await file.text());
-    const normalized = normalizeDbPayload(parsed);
-    const previousActive = ctx.activeFamilyId;
-    ctx.db = normalized;
-
-    const saved = await persistDb(ctx, { endpoint: API.import });
-    if (!saved) {
-      throw new Error("Could not write imported file to family DB.");
-    }
-
-    if (previousActive !== null && findFamily(ctx.db, previousActive)) {
-      ctx.activeFamilyId = previousActive;
-    } else if (ctx.db.state.families.length > 0) {
-      ctx.activeFamilyId = ctx.db.state.families[0].id;
-    } else {
-      ctx.activeFamilyId = null;
-    }
-    if (ctx.activeFamilyId !== null) {
-      setFamilyHash(ctx.activeFamilyId);
-    }
-
-    renderAll(ctx);
-    setHubStatus(ctx.els, `Imported ${file.name}.`);
-  } catch (error) {
-    setHubStatus(ctx.els, error.message || "Import failed.", true);
-  }
-}
-
-async function handleResetFamilyDb(ctx) {
-  const confirmed = window.confirm(
-    "Reset the Family Investment DB file? This does not affect stock dilution data.",
-  );
-  if (!confirmed) {
-    return;
-  }
-
-  ctx.db = createInitialDb();
-  ctx.activeFamilyId = null;
-  const saved = await persistDb(ctx, { endpoint: API.db });
-  if (!saved) {
-    setHubStatus(ctx.els, "Could not reset family DB on server.", true);
-    return;
-  }
-  setFamilyHash(null);
-  renderAll(ctx);
-  setHubStatus(ctx.els, "Family DB has been reset.");
-}
-
 async function handleAddAccount(ctx, event) {
   event.preventDefault();
-  const family = getActiveFamily(ctx);
+  const family = getPrimaryFamily(ctx.db);
   if (!family) {
-    setFamilyStatus(ctx.els, "Open a family page first.", true);
+    setFamilyStatus(ctx.els, "Family profile is unavailable.", true);
     return;
   }
 
@@ -339,12 +242,14 @@ async function handleAddAccount(ctx, event) {
       date: normalizeDate(ctx.els.familyAccountDate.value || todayISO()),
       note: sanitizeText(ctx.els.familyAccountNote.value, 180),
     };
+
     if (!payload.memberName) {
       throw new Error("Family member name is required.");
     }
     if (!payload.accountName) {
       throw new Error("Account name is required.");
     }
+
     const duplicate = family.accounts.find(
       (account) =>
         account.memberName.toLowerCase() === payload.memberName.toLowerCase() &&
@@ -366,6 +271,7 @@ async function handleAddAccount(ctx, event) {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
     family.nextAccountId += 1;
     family.accounts.push(account);
 
@@ -391,44 +297,120 @@ async function handleAddAccount(ctx, event) {
     ctx.els.familyAccountForm.reset();
     ctx.els.familyAccountDate.value = todayISO();
     renderAll(ctx);
-    setFamilyStatus(ctx.els, "Account added and logged.");
+    setFamilyStatus(ctx.els, "Account added.");
   } catch (error) {
     setFamilyStatus(ctx.els, error.message, true);
   }
 }
 
+async function handleAccountsTableClick(ctx, event) {
+  const family = getPrimaryFamily(ctx.db);
+  if (!family) {
+    return;
+  }
+
+  const openBtn = event.target.closest("button[data-account-open]");
+  if (openBtn) {
+    const accountId = toPositiveInt(openBtn.dataset.accountOpen, null);
+    const account = findAccountById(family, accountId);
+    if (!account) {
+      return;
+    }
+    openAccountDetailPage(ctx, account.id, { updateHash: true });
+    renderAll(ctx);
+    return;
+  }
+
+  const removeBtn = event.target.closest("button[data-account-remove]");
+  if (!removeBtn) {
+    return;
+  }
+
+  const accountId = toPositiveInt(removeBtn.dataset.accountRemove, null);
+  const account = findAccountById(family, accountId);
+  if (!account) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Remove account "${account.accountName}" for ${account.memberName}?`,
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  appendFamilyEvent(family, {
+    date: todayISO(),
+    type: "account_removed",
+    memberName: account.memberName,
+    accountId: account.id,
+    accountName: account.accountName,
+    currentDeltaCents: -account.currentCents,
+    investedDeltaCents: -account.investedCents,
+    currentAfterCents: 0,
+    investedAfterCents: 0,
+    note: "Account removed.",
+  });
+
+  family.accounts = family.accounts.filter((item) => item.id !== account.id);
+  family.updatedAt = new Date().toISOString();
+
+  if (ctx.activeAccountId === account.id) {
+    openDashboardPage(ctx, { updateHash: true });
+  }
+
+  const saved = await persistDb(ctx, { endpoint: API.db });
+  if (!saved) {
+    setFamilyStatus(ctx.els, "Could not save after removing account.", true);
+    return;
+  }
+
+  renderAll(ctx);
+  setFamilyStatus(ctx.els, "Account removed.");
+}
+
 async function handleRecordChange(ctx, event) {
   event.preventDefault();
-  const family = getActiveFamily(ctx);
-  if (!family) {
-    setFamilyStatus(ctx.els, "Open a family page first.", true);
+
+  const family = getPrimaryFamily(ctx.db);
+  const account = getActiveAccount(ctx);
+  if (!family || !account) {
+    setFamilyStatus(ctx.els, "Open an account detail page first.", true);
     return;
   }
 
   try {
-    const accountId = toPositiveInt(ctx.els.familyChangeAccount.value, null);
-    if (accountId === null) {
-      throw new Error("Select an account.");
-    }
-    const account = family.accounts.find((item) => item.id === accountId);
-    if (!account) {
-      throw new Error("Selected account is not valid.");
+    const date = normalizeDate(ctx.els.familyChangeDate.value || todayISO());
+    const type = ctx.els.familyChangeType.value;
+    const amountCents = parseUnsignedCents(
+      ctx.els.familyChangeAmount.value,
+      "Activity amount",
+    );
+    const note = sanitizeText(ctx.els.familyChangeNote.value, 180);
+
+    let currentDeltaCents = 0;
+    let investedDeltaCents = 0;
+
+    if (type === "deposit") {
+      currentDeltaCents = amountCents;
+      investedDeltaCents = amountCents;
+    } else if (type === "withdrawal") {
+      currentDeltaCents = -amountCents;
+      investedDeltaCents = -amountCents;
+    } else if (type === "set_value") {
+      currentDeltaCents = amountCents - account.currentCents;
+      investedDeltaCents = 0;
+    } else {
+      throw new Error("Unsupported activity type.");
     }
 
-    const currentDeltaCents = parseSignedCents(
-      ctx.els.familyCurrentDelta.value,
-      "Current value change",
-    );
-    const investedDeltaCents = parseSignedCents(
-      ctx.els.familyInvestedDelta.value,
-      "Invested amount change",
-    );
     if (currentDeltaCents === 0 && investedDeltaCents === 0) {
-      throw new Error("At least one change value must be non-zero.");
+      throw new Error("No change detected.");
     }
 
     const nextCurrent = account.currentCents + currentDeltaCents;
     const nextInvested = account.investedCents + investedDeltaCents;
+
     if (nextCurrent < 0) {
       throw new Error("Current value would become negative.");
     }
@@ -439,12 +421,10 @@ async function handleRecordChange(ctx, event) {
     account.currentCents = nextCurrent;
     account.investedCents = nextInvested;
     account.updatedAt = new Date().toISOString();
-    const date = normalizeDate(ctx.els.familyChangeDate.value || todayISO());
-    const note = sanitizeText(ctx.els.familyChangeNote.value, 180);
 
     appendFamilyEvent(family, {
       date,
-      type: classifyChangeType(currentDeltaCents, investedDeltaCents),
+      type,
       memberName: account.memberName,
       accountId: account.id,
       accountName: account.accountName,
@@ -458,167 +438,150 @@ async function handleRecordChange(ctx, event) {
     family.updatedAt = new Date().toISOString();
     const saved = await persistDb(ctx, { endpoint: API.db });
     if (!saved) {
-      throw new Error("Could not save change to family DB.");
+      throw new Error("Could not save account activity.");
     }
 
-    ctx.els.familyCurrentDelta.value = "0";
-    ctx.els.familyInvestedDelta.value = "0";
+    ctx.els.familyChangeAmount.value = "";
     ctx.els.familyChangeNote.value = "";
     renderAll(ctx);
-    setFamilyStatus(ctx.els, "Change recorded with timestamp.");
+    setFamilyStatus(ctx.els, `${ACTIVITY_LABELS[type]} recorded.`);
   } catch (error) {
     setFamilyStatus(ctx.els, error.message, true);
   }
 }
 
-function handleHashChange(ctx) {
-  const familyId = parseFamilyIdFromHash(window.location.hash);
-  if (familyId !== null && findFamily(ctx.db, familyId)) {
-    if (ctx.activeFamilyId !== familyId) {
-      ctx.activeFamilyId = familyId;
-      ctx.activeDetailView = "overview";
-      renderAll(ctx);
+function handleExportFamilyDb(ctx) {
+  setHubStatus(ctx.els, "Downloading family dashboard DB...");
+  window.location.href = API.export;
+}
+
+async function handleImportFamilyDb(ctx, event) {
+  const file = event.target.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  try {
+    const parsed = JSON.parse(await file.text());
+    ctx.db = normalizeDbPayload(parsed);
+    ensurePrimaryFamily(ctx.db);
+
+    const saved = await persistDb(ctx, { endpoint: API.import });
+    if (!saved) {
+      throw new Error("Could not write imported file to family DB.");
     }
+
+    const activeAccount = getActiveAccount(ctx);
+    if (!activeAccount) {
+      openDashboardPage(ctx, { updateHash: isFamilyRoute() });
+    }
+
+    renderAll(ctx);
+    setHubStatus(ctx.els, `Imported ${file.name}.`);
+  } catch (error) {
+    setHubStatus(ctx.els, error.message || "Import failed.", true);
   }
 }
 
-function handleDetailTabClick(ctx, event) {
-  const view = event.currentTarget?.dataset?.familyDetailView;
-  if (!view) {
+async function handleResetFamilyDb(ctx) {
+  const confirmed = window.confirm(
+    "Reset the Family Investment DB file? This does not affect stock dilution data.",
+  );
+  if (!confirmed) {
     return;
   }
-  setActiveDetailView(ctx, view);
+
+  ctx.db = createInitialDb();
+  ensurePrimaryFamily(ctx.db);
+  openDashboardPage(ctx, { updateHash: isFamilyRoute() });
+
+  const saved = await persistDb(ctx, { endpoint: API.db });
+  if (!saved) {
+    setHubStatus(ctx.els, "Could not reset family DB on server.", true);
+    return;
+  }
+
+  renderAll(ctx);
+  setHubStatus(ctx.els, "Family DB has been reset.");
 }
 
-function handleDetailTabKeydown(ctx, event) {
-  const validKeys = new Set(["ArrowRight", "ArrowLeft", "Home", "End"]);
-  if (!validKeys.has(event.key)) {
+function handleHashChange(ctx) {
+  if (!isFamilyRoute()) {
     return;
   }
-  event.preventDefault();
+  syncPageFromHash(ctx);
+  renderAll(ctx);
+}
 
-  const tabs = ctx.els.familyDetailTabs;
-  const currentIndex = tabs.indexOf(event.currentTarget);
-  if (currentIndex < 0) {
+function syncPageFromHash(ctx) {
+  if (!isFamilyRoute()) {
     return;
   }
 
-  let nextIndex = currentIndex;
-  if (event.key === "ArrowRight") {
-    nextIndex = (currentIndex + 1) % tabs.length;
-  } else if (event.key === "ArrowLeft") {
-    nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
-  } else if (event.key === "Home") {
-    nextIndex = 0;
-  } else if (event.key === "End") {
-    nextIndex = tabs.length - 1;
-  }
-
-  const nextTab = tabs[nextIndex];
-  if (!nextTab) {
+  const family = getPrimaryFamily(ctx.db);
+  if (!family) {
+    openDashboardPage(ctx, { updateHash: false });
     return;
   }
-  nextTab.focus();
-  nextTab.click();
+
+  const accountId = parseAccountIdFromHash(window.location.hash);
+  const account = findAccountById(family, accountId);
+
+  if (account) {
+    openAccountDetailPage(ctx, account.id, { updateHash: false });
+  } else {
+    openDashboardPage(ctx, { updateHash: false });
+  }
+}
+
+function openDashboardPage(ctx, { updateHash }) {
+  ctx.activePage = "dashboard";
+  ctx.activeAccountId = null;
+  if (updateHash) {
+    setDashboardHash();
+  }
+}
+
+function openAccountDetailPage(ctx, accountId, { updateHash }) {
+  ctx.activePage = "account";
+  ctx.activeAccountId = accountId;
+  if (updateHash) {
+    setAccountHash(accountId);
+  }
 }
 
 function renderAll(ctx) {
-  renderFamilyTable(ctx);
-  renderActiveFamilyView(ctx);
-}
-
-function renderFamilyTable(ctx) {
-  const families = [...ctx.db.state.families].sort((a, b) =>
-    a.name.localeCompare(b.name),
-  );
-  if (!families.length) {
-    ctx.els.familyTableBody.innerHTML =
-      '<tr><td colspan="5" class="empty">No families yet.</td></tr>';
-    return;
-  }
-
-  ctx.els.familyTableBody.innerHTML = families
-    .map((family) => {
-      const stats = getFamilyStats(family);
-      const activeTag = family.id === ctx.activeFamilyId ? " (Active)" : "";
-      return `<tr>
-        <td>${escapeHtml(family.name)}${escapeHtml(activeTag)}</td>
-        <td>${stats.memberCount}</td>
-        <td>${stats.accountCount}</td>
-        <td>${formatCents(stats.totalValueCents)}</td>
-        <td><button type="button" class="tableAction ghostBtn" data-family-open="${family.id}">Open Family</button></td>
-      </tr>`;
-    })
-    .join("");
-}
-
-function renderActiveFamilyView(ctx) {
-  const family = getActiveFamily(ctx);
+  const family = getPrimaryFamily(ctx.db);
   if (!family) {
-    ctx.els.familyDetailEmpty.hidden = false;
-    ctx.els.familyDetailPage.hidden = true;
-    setActiveDetailView(ctx, "overview");
     return;
   }
 
-  ctx.els.familyDetailEmpty.hidden = true;
-  ctx.els.familyDetailPage.hidden = false;
-  ctx.els.familySelectedTitle.textContent = `${family.name} details`;
+  ctx.els.familyNameInput.value = family.name;
 
+  renderFamilySummary(ctx, family);
+  renderMemberCards(ctx, family);
+  renderAccountsTable(ctx, family);
+
+  const activeAccount = getActiveAccount(ctx);
+  const showAccountDetail = ctx.activePage === "account" && Boolean(activeAccount);
+
+  ctx.els.familyDashboardPage.hidden = showAccountDetail;
+  ctx.els.familyAccountDetailPage.hidden = !showAccountDetail;
+
+  if (showAccountDetail && activeAccount) {
+    renderAccountDetail(ctx, family, activeAccount);
+  }
+}
+
+function renderFamilySummary(ctx, family) {
   const stats = getFamilyStats(family);
+  ctx.els.familySelectedTitle.textContent = `${family.name} Dashboard`;
   ctx.els.familyStatTotalValue.textContent = formatCents(stats.totalValueCents);
   ctx.els.familyStatTotalInvested.textContent = formatCents(stats.totalInvestedCents);
   ctx.els.familyStatNet.textContent = formatSignedCents(stats.totalNetCents);
   ctx.els.familyStatAccountCount.textContent = String(stats.accountCount);
   ctx.els.familyStatNet.classList.toggle("valuePositive", stats.totalNetCents > 0);
   ctx.els.familyStatNet.classList.toggle("valueNegative", stats.totalNetCents < 0);
-
-  renderAllocationChart(ctx, family);
-  renderMemberCards(ctx, family);
-  renderAccountsTable(ctx, family);
-  renderEventsTable(ctx, family);
-  renderAccountSelectors(ctx, family);
-  renderTrendChart(ctx);
-  setActiveDetailView(ctx, ctx.activeDetailView);
-}
-
-function setActiveDetailView(ctx, view) {
-  const normalized = view === "analytics" ? "analytics" : "overview";
-  ctx.activeDetailView = normalized;
-
-  for (const tab of ctx.els.familyDetailTabs) {
-    const isActive = tab.dataset.familyDetailView === normalized;
-    tab.classList.toggle("isActive", isActive);
-    tab.setAttribute("aria-selected", isActive ? "true" : "false");
-    tab.tabIndex = isActive ? 0 : -1;
-  }
-
-  for (const panel of ctx.els.familyDetailPanels) {
-    const isActive = panel.dataset.familyDetailPanel === normalized;
-    panel.classList.toggle("isActive", isActive);
-    panel.hidden = !isActive;
-  }
-}
-
-function renderAllocationChart(ctx, family) {
-  const memberSummaries = getMemberSummaries(family.accounts);
-  const slices = memberSummaries
-    .filter((member) => member.currentCents > 0)
-    .map((member) => ({
-      label: member.memberName,
-      value: member.currentCents,
-      meta: `${formatCents(member.currentCents)} | Net ${formatSignedCents(member.netCents)}`,
-    }));
-  renderDoughnutChart({
-    canvas: ctx.els.familyAllocationChart,
-    legendEl: ctx.els.familyAllocationLegend,
-    slices,
-    emptyLabel: "Add accounts to build this chart.",
-    centerLabel: "Total Value",
-    centerValue: formatCents(
-      memberSummaries.reduce((sum, member) => sum + member.currentCents, 0),
-    ),
-  });
 }
 
 function renderMemberCards(ctx, family) {
@@ -656,9 +619,10 @@ function renderAccountsTable(ctx, family) {
     }
     return a.accountName.localeCompare(b.accountName);
   });
+
   if (!accounts.length) {
     ctx.els.familyAccountsTableBody.innerHTML =
-      '<tr><td colspan="7" class="empty">No accounts recorded yet.</td></tr>';
+      '<tr><td colspan="8" class="empty">No accounts recorded yet.</td></tr>';
     return;
   }
 
@@ -674,30 +638,48 @@ function renderAccountsTable(ctx, family) {
         <td>${formatCents(account.investedCents)}</td>
         <td><strong class="${netClass}">${formatSignedCents(netCents)}</strong></td>
         <td>${formatDateTime(account.updatedAt)}</td>
-        <td>${escapeHtml(account.note || "—")}</td>
+        <td><button type="button" class="tableAction ghostBtn" data-account-open="${account.id}">Open Details</button></td>
+        <td><button type="button" class="tableAction danger" data-account-remove="${account.id}">Remove</button></td>
       </tr>`;
     })
     .join("");
 }
 
-function renderEventsTable(ctx, family) {
-  const events = [...family.events].sort(compareEventsDesc);
+function renderAccountDetail(ctx, family, account) {
+  ctx.els.familyAccountDetailTitle.textContent = `${account.memberName} | ${account.accountName}`;
+  ctx.els.familyAccountCurrentValue.textContent = formatCents(account.currentCents);
+  ctx.els.familyAccountInvestedValue.textContent = formatCents(account.investedCents);
+
+  const netCents = account.currentCents - account.investedCents;
+  ctx.els.familyAccountNetValue.textContent = formatSignedCents(netCents);
+  ctx.els.familyAccountNetValue.classList.toggle("valuePositive", netCents > 0);
+  ctx.els.familyAccountNetValue.classList.toggle("valueNegative", netCents < 0);
+
+  renderAccountEventsTable(ctx, family, account.id);
+  renderTrendChart(ctx, family, account.id);
+  updateChangeFormFields(ctx);
+}
+
+function renderAccountEventsTable(ctx, family, accountId) {
+  const events = [...family.events]
+    .filter((event) => event.accountId === accountId)
+    .sort(compareEventsDesc);
+
   if (!events.length) {
     ctx.els.familyEventsTableBody.innerHTML =
-      '<tr><td colspan="10" class="empty">No history events yet.</td></tr>';
+      '<tr><td colspan="7" class="empty">No history events yet.</td></tr>';
     return;
   }
 
   ctx.els.familyEventsTableBody.innerHTML = events
     .map((event) => {
+      const activity = ACTIVITY_LABELS[event.type] || event.type;
+      const cashFlow = formatEventCashFlow(event);
       return `<tr>
         <td>${event.date}</td>
         <td>${formatDateTime(event.occurredAt)}</td>
-        <td>${escapeHtml(event.type)}</td>
-        <td>${escapeHtml(event.memberName)}</td>
-        <td>${escapeHtml(event.accountName)}</td>
-        <td>${formatSignedCents(event.currentDeltaCents)}</td>
-        <td>${formatSignedCents(event.investedDeltaCents)}</td>
+        <td>${escapeHtml(activity)}</td>
+        <td>${escapeHtml(cashFlow)}</td>
         <td>${formatCents(event.currentAfterCents)}</td>
         <td>${formatCents(event.investedAfterCents)}</td>
         <td>${escapeHtml(event.note || "—")}</td>
@@ -706,68 +688,27 @@ function renderEventsTable(ctx, family) {
     .join("");
 }
 
-function renderAccountSelectors(ctx, family) {
-  const options = family.accounts
-    .map(
-      (account) =>
-        `<option value="${account.id}">${escapeHtml(account.memberName)} | ${escapeHtml(account.accountName)}</option>`,
-    )
-    .join("");
-
-  ctx.els.familyChangeAccount.innerHTML = options;
-  if (!options) {
-    ctx.els.familyChangeAccount.innerHTML =
-      '<option value="">No accounts yet</option>';
-  }
-  ctx.els.familyChangeAccount.disabled = !options;
-
-  const existingTrendValue = ctx.els.familyTrendAccountSelect.value;
-  ctx.els.familyTrendAccountSelect.innerHTML = `<option value="all">Family Total</option>${options}`;
-  const hasExisting = ctx.els.familyTrendAccountSelect.querySelector(
-    `option[value="${escapeAttribute(existingTrendValue)}"]`,
-  );
-  if (hasExisting) {
-    ctx.els.familyTrendAccountSelect.value = existingTrendValue;
-  } else {
-    ctx.els.familyTrendAccountSelect.value = "all";
-  }
-}
-
-function renderTrendChart(ctx) {
-  const family = getActiveFamily(ctx);
-  if (!family) {
-    return;
-  }
-  const mode = ctx.els.familyTrendAccountSelect.value || "all";
-  let points = [];
-  let meta = "";
-
-  if (mode === "all") {
-    points = buildFamilyTotalSeries(family);
-    meta = "Showing total family current value over recorded change history.";
-  } else {
-    const accountId = toPositiveInt(mode, null);
-    const account = family.accounts.find((item) => item.id === accountId);
-    points = buildAccountSeries(family, accountId);
-    meta = account
-      ? `Showing account value trend: ${account.memberName} | ${account.accountName}`
-      : "Selected account not found.";
-  }
+function renderTrendChart(ctx, family, accountId) {
+  const account = findAccountById(family, accountId);
+  const points = buildAccountSeries(family, accountId);
 
   renderLineChart({
     canvas: ctx.els.familyTrendChart,
     points,
-    emptyLabel: "Record account changes to plot trend.",
+    emptyLabel: "Record account activity to plot trend.",
     yFormatter: (value) => formatCompactCents(value),
     lineColor: "#2f6f95",
   });
-  ctx.els.familyTrendMeta.textContent = meta;
+
+  if (account) {
+    ctx.els.familyTrendMeta.textContent =
+      `Showing current value trend for ${account.memberName} | ${account.accountName}.`;
+  } else {
+    ctx.els.familyTrendMeta.textContent = "Selected account not found.";
+  }
 }
 
 function buildAccountSeries(family, accountId) {
-  if (accountId === null) {
-    return [];
-  }
   return [...family.events]
     .filter((event) => event.accountId === accountId)
     .sort(compareEventsAsc)
@@ -777,26 +718,11 @@ function buildAccountSeries(family, accountId) {
     }));
 }
 
-function buildFamilyTotalSeries(family) {
-  const events = [...family.events].sort(compareEventsAsc);
-  if (!events.length) {
-    return [];
+function formatEventCashFlow(event) {
+  if (event.type === "set_value" || event.investedDeltaCents === 0) {
+    return "—";
   }
-
-  const accountValues = new Map();
-  const series = [];
-  for (const event of events) {
-    accountValues.set(event.accountId, event.currentAfterCents);
-    let total = 0;
-    for (const value of accountValues.values()) {
-      total += value;
-    }
-    series.push({
-      label: shortDateLabel(event.date),
-      value: total,
-    });
-  }
-  return series;
+  return formatSignedCents(event.investedDeltaCents);
 }
 
 function appendFamilyEvent(family, payload) {
@@ -815,22 +741,6 @@ function appendFamilyEvent(family, payload) {
     note: sanitizeText(payload.note || "", 180),
   });
   family.nextEventId += 1;
-}
-
-function classifyChangeType(currentDeltaCents, investedDeltaCents) {
-  if (investedDeltaCents > 0) {
-    return "invest_add";
-  }
-  if (investedDeltaCents < 0) {
-    return "invest_reduce";
-  }
-  if (currentDeltaCents > 0) {
-    return "value_gain";
-  }
-  if (currentDeltaCents < 0) {
-    return "value_drop";
-  }
-  return "adjustment";
 }
 
 function getFamilyStats(family) {
@@ -870,6 +780,92 @@ function getMemberSummaries(accounts) {
     item.accountCount += 1;
   }
   return [...grouped.values()].sort((a, b) => b.currentCents - a.currentCents);
+}
+
+function getPrimaryFamily(db) {
+  return db.state.families[0] || null;
+}
+
+function ensurePrimaryFamily(db) {
+  const existing = getPrimaryFamily(db);
+  if (existing) {
+    return { family: existing, created: false };
+  }
+
+  const family = {
+    id: db.state.nextFamilyId,
+    name: DEFAULT_FAMILY_NAME,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    nextAccountId: 1,
+    nextEventId: 1,
+    accounts: [],
+    events: [],
+  };
+
+  db.state.families.push(family);
+  db.state.nextFamilyId += 1;
+  return { family, created: true };
+}
+
+function getActiveAccount(ctx) {
+  const family = getPrimaryFamily(ctx.db);
+  if (!family || ctx.activeAccountId === null) {
+    return null;
+  }
+  return findAccountById(family, ctx.activeAccountId);
+}
+
+function findAccountById(family, accountId) {
+  if (!family || accountId === null) {
+    return null;
+  }
+  return family.accounts.find((item) => item.id === accountId) || null;
+}
+
+function isFamilyRoute() {
+  return (
+    typeof window.location.hash === "string" &&
+    window.location.hash.startsWith("#family-dashboard")
+  );
+}
+
+function parseAccountIdFromHash(hash) {
+  if (typeof hash !== "string") {
+    return null;
+  }
+  const match = hash.match(/^#family-dashboard\/account-(\d+)$/);
+  if (!match) {
+    return null;
+  }
+  return toPositiveInt(match[1], null);
+}
+
+function setDashboardHash() {
+  if (window.location.hash !== "#family-dashboard") {
+    window.location.hash = "#family-dashboard";
+  }
+}
+
+function setAccountHash(accountId) {
+  const nextHash = `#family-dashboard/account-${accountId}`;
+  if (window.location.hash !== nextHash) {
+    window.location.hash = nextHash;
+  }
+}
+
+function compareEventsAsc(a, b) {
+  if (a.date !== b.date) {
+    return a.date.localeCompare(b.date);
+  }
+  return a.id - b.id;
+}
+
+function compareEventsDesc(a, b) {
+  if (a.date !== b.date) {
+    return b.date.localeCompare(a.date);
+  }
+  return b.id - a.id;
 }
 
 async function loadDbFromServer() {
@@ -955,6 +951,7 @@ function normalizeDbPayload(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return base;
   }
+
   const sourceState =
     payload.state && typeof payload.state === "object" ? payload.state : payload;
   const rawFamilies = Array.isArray(sourceState.families) ? sourceState.families : [];
@@ -1050,50 +1047,6 @@ function normalizeEvent(rawEvent, fallbackId) {
   };
 }
 
-function getActiveFamily(ctx) {
-  if (ctx.activeFamilyId === null) {
-    return null;
-  }
-  return findFamily(ctx.db, ctx.activeFamilyId);
-}
-
-function findFamily(db, familyId) {
-  return db.state.families.find((family) => family.id === familyId) || null;
-}
-
-function parseFamilyIdFromHash(hash) {
-  if (typeof hash !== "string") {
-    return null;
-  }
-  const match = hash.match(/^#family-dashboard\/family-(\d+)$/);
-  if (!match) {
-    return null;
-  }
-  return toPositiveInt(match[1], null);
-}
-
-function setFamilyHash(familyId) {
-  const nextHash =
-    familyId === null ? "#family-dashboard" : `#family-dashboard/family-${familyId}`;
-  if (window.location.hash !== nextHash) {
-    window.location.hash = nextHash;
-  }
-}
-
-function compareEventsAsc(a, b) {
-  if (a.date !== b.date) {
-    return a.date.localeCompare(b.date);
-  }
-  return a.id - b.id;
-}
-
-function compareEventsDesc(a, b) {
-  if (a.date !== b.date) {
-    return b.date.localeCompare(a.date);
-  }
-  return b.id - a.id;
-}
-
 function parseUnsignedCents(raw, label) {
   if (raw === null || raw === undefined || raw === "") {
     throw new Error(`${label} is required.`);
@@ -1101,21 +1054,6 @@ function parseUnsignedCents(raw, label) {
   const numeric = Number(raw);
   if (!Number.isFinite(numeric) || numeric < 0) {
     throw new Error(`${label} must be a non-negative number.`);
-  }
-  const cents = Math.round(numeric * 100);
-  if (!Number.isSafeInteger(cents)) {
-    throw new Error(`${label} is too large.`);
-  }
-  return cents;
-}
-
-function parseSignedCents(raw, label) {
-  if (raw === null || raw === undefined || raw === "") {
-    throw new Error(`${label} is required.`);
-  }
-  const numeric = Number(raw);
-  if (!Number.isFinite(numeric)) {
-    throw new Error(`${label} must be a valid number.`);
   }
   const cents = Math.round(numeric * 100);
   if (!Number.isSafeInteger(cents)) {
@@ -1267,10 +1205,4 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
-}
-
-function escapeAttribute(value) {
-  return String(value)
-    .replaceAll("\\", "\\\\")
-    .replaceAll('"', '\\"');
 }

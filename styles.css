@@ -473,34 +473,14 @@ button.revertBtn {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.detailTabs {
-  display: flex;
-  gap: 0.45rem;
-  flex-wrap: wrap;
+.accountDetailStats {
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
 }
 
-.detailTab {
-  background: #edf6f1;
-  color: #1f4d3a;
-  border: 1px solid #bfd9cb;
-  padding: 0.45rem 0.72rem;
-  border-radius: 999px;
-}
-
-.detailTab:hover {
-  filter: none;
-  background: #e4f1ea;
-}
-
-.detailTab.isActive {
-  background: #185a40;
-  color: #effff6;
-  border-color: #185a40;
-}
-
-.detailTab:focus-visible {
-  outline: 2px solid #6cb68f;
-  outline-offset: 2px;
+.familyTrendCanvas {
+  width: 100%;
+  max-width: 100%;
+  height: 280px;
 }
 
 .compactForm {
@@ -678,6 +658,10 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .accountDetailStats {
+    grid-template-columns: 1fr;
+  }
+
   .chartBlock {
     grid-template-columns: 1fr;
   }
@@ -702,5 +686,9 @@ th {
 
   .memberCards {
     grid-template-columns: 1fr;
+  }
+
+  .familyTrendCanvas {
+    height: 240px;
   }
 }

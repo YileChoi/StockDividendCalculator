@@ -188,8 +188,13 @@ function escapeHtml(value) {
 
 function prepareCanvas(canvas) {
   const rect = canvas.getBoundingClientRect();
-  const width = Math.max(1, Math.round(rect.width || canvas.width || 320));
-  const height = Math.max(1, Math.round(rect.height || canvas.height || width));
+  const attrWidth = Number(canvas.getAttribute("width")) || 320;
+  const attrHeight = Number(canvas.getAttribute("height")) || attrWidth;
+  const width = Math.max(1, Math.round(rect.width || canvas.clientWidth || attrWidth));
+  const height = Math.max(
+    1,
+    Math.round(rect.height || canvas.clientHeight || attrHeight),
+  );
   const dpr = Math.max(window.devicePixelRatio || 1, 1);
   const pixelWidth = Math.max(1, Math.round(width * dpr));
   const pixelHeight = Math.max(1, Math.round(height * dpr));

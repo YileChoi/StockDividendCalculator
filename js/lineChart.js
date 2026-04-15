@@ -147,8 +147,13 @@ function drawEmptyState(ctx, width, height, emptyLabel) {
 
 function prepareCanvas(canvas) {
   const rect = canvas.getBoundingClientRect();
-  const width = Math.max(1, Math.round(rect.width || canvas.width || 420));
-  const height = Math.max(1, Math.round(rect.height || canvas.height || 280));
+  const attrWidth = Number(canvas.getAttribute("width")) || 420;
+  const attrHeight = Number(canvas.getAttribute("height")) || 280;
+  const width = Math.max(1, Math.round(rect.width || canvas.clientWidth || attrWidth));
+  const height = Math.max(
+    1,
+    Math.round(rect.height || canvas.clientHeight || attrHeight),
+  );
   const dpr = Math.max(window.devicePixelRatio || 1, 1);
   const pixelWidth = Math.max(1, Math.round(width * dpr));
   const pixelHeight = Math.max(1, Math.round(height * dpr));
