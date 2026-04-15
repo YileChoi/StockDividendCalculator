@@ -10,6 +10,7 @@ const API = {
 const SCHEMA_VERSION = 1;
 const NETWORK_TIMEOUT_MS = 8000;
 const DEFAULT_FAMILY_NAME = "My Family";
+let activeFamilyCtx = null;
 
 const ACTIVITY_LABELS = {
   account_created: "Account Opened",
@@ -32,11 +33,26 @@ export function initFamilyDashboard() {
     activeMemberName: null,
     activeAccountId: null,
   };
+  activeFamilyCtx = ctx;
 
   bindEvents(ctx);
   setDefaultDates(els);
   updateChangeFormFields(ctx);
   void init(ctx);
+}
+
+export async function saveFamilyDashboardNow() {
+  const ctx = activeFamilyCtx;
+  if (!ctx?.els?.familyProfileForm) {
+    return false;
+  }
+  ensurePrimaryFamily(ctx.db);
+  const family = getPrimaryFamily(ctx.db);
+  if (!family) {
+    return false;
+  }
+  family.updatedAt = new Date().toISOString();
+  return persistDb(ctx, { endpoint: API.db });
 }
 
 async function init(ctx) {
@@ -187,6 +203,9 @@ function bindEvents(ctx) {
   });
   els.familyChangeForm.addEventListener("submit", (event) =>
     handleRecordChange(ctx, event),
+  );
+  els.familyEventsTableBody.addEventListener("click", (event) =>
+    handleAccountEventsTableClick(ctx, event),
   );
 
   window.addEventListener("hashchange", () => handleHashChange(ctx));
@@ -463,6 +482,26 @@ async function handleRecordChange(ctx, event) {
   } catch (error) {
     setFamilyStatus(ctx.els, error.message, true);
   }
+}
+
+async function handleAccountEventsTableClick(ctx, event) {
+  const family = getPrimaryFamily(ctx.db);
+  const account = getActiveAccount(ctx);
+  if (!family || !account) {
+    return;
+  }
+
+  const removeBtn = event.target.closest("button[data-event-remove]");
+  if (!removeBtn) {
+    return;
+  }
+
+  const eventId = toPositiveInt(removeBtn.dataset.eventRemove, null);
+  if (eventId === null) {
+    return;
+  }
+
+  await removeAccountEvent(ctx, eventId);
 }
 
 function handleExportFamilyDb(ctx) {
@@ -868,7 +907,7 @@ function renderAccountEventsTable(ctx, family, accountId) {
 
   if (!events.length) {
     ctx.els.familyEventsTableBody.innerHTML =
-      '<tr><td colspan="7" class="empty">No history events yet.</td></tr>';
+      '<tr><td colspan="8" class="empty">No history events yet.</td></tr>';
     return;
   }
 
@@ -884,6 +923,7 @@ function renderAccountEventsTable(ctx, family, accountId) {
         <td>${formatCents(event.currentAfterCents)}</td>
         <td>${formatCents(event.investedAfterCents)}</td>
         <td>${escapeHtml(event.note || "-")}</td>
+        <td><button type="button" class="tableAction danger" data-event-remove="${event.id}">Delete</button></td>
       </tr>`;
     })
     .join("");
@@ -995,6 +1035,114 @@ async function removeAccount(ctx, accountId) {
 
   renderAll(ctx);
   setHubStatus(ctx.els, "Account removed.");
+}
+
+async function removeAccountEvent(ctx, eventId) {
+  const family = getPrimaryFamily(ctx.db);
+  const account = getActiveAccount(ctx);
+  if (!family || !account) {
+    return;
+  }
+
+  const target = family.events.find(
+    (event) => event.id === eventId && event.accountId === account.id,
+  );
+  if (!target) {
+    setFamilyStatus(ctx.els, "Selected history record was not found.", true);
+    return;
+  }
+
+  const activity = ACTIVITY_LABELS[target.type] || target.type;
+  const confirmed = window.confirm(
+    `Delete "${activity}" from ${target.date}? This recalculates this account history.`,
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  const backupEvents = family.events.map((event) => ({ ...event }));
+  const backupCurrent = account.currentCents;
+  const backupInvested = account.investedCents;
+  const backupUpdatedAt = account.updatedAt;
+  const backupFamilyUpdatedAt = family.updatedAt;
+
+  family.events = family.events.filter((event) => event.id !== target.id);
+  const recalculated = recalculateAccountTimeline(family, account.id);
+  if (!recalculated.ok) {
+    family.events = backupEvents;
+    account.currentCents = backupCurrent;
+    account.investedCents = backupInvested;
+    account.updatedAt = backupUpdatedAt;
+    setFamilyStatus(ctx.els, recalculated.error, true);
+    return;
+  }
+
+  account.currentCents = recalculated.currentCents;
+  account.investedCents = recalculated.investedCents;
+  account.updatedAt = new Date().toISOString();
+  family.updatedAt = new Date().toISOString();
+  family.events.sort(compareEventsAsc);
+
+  const saved = await persistDb(ctx, { endpoint: API.db });
+  if (!saved) {
+    family.events = backupEvents;
+    account.currentCents = backupCurrent;
+    account.investedCents = backupInvested;
+    account.updatedAt = backupUpdatedAt;
+    family.updatedAt = backupFamilyUpdatedAt;
+    setFamilyStatus(ctx.els, "Could not delete history record.", true);
+    return;
+  }
+
+  renderAll(ctx);
+  setFamilyStatus(ctx.els, `${activity} record deleted.`);
+}
+
+function recalculateAccountTimeline(family, accountId) {
+  const events = [...family.events]
+    .filter((event) => event.accountId === accountId)
+    .sort(compareEventsAsc);
+  let currentCents = 0;
+  let investedCents = 0;
+
+  for (const event of events) {
+    const activity = ACTIVITY_LABELS[event.type] || event.type;
+
+    if (event.type === "set_value") {
+      const targetCurrentCents = toNonNegativeSafeInt(event.currentAfterCents);
+      const nextCurrentCents = targetCurrentCents;
+      const nextInvestedCents = investedCents + event.investedDeltaCents;
+      if (nextInvestedCents < 0) {
+        return {
+          ok: false,
+          error: `Deleting this record would make invested amount negative at ${activity} on ${event.date}.`,
+        };
+      }
+
+      event.currentDeltaCents = nextCurrentCents - currentCents;
+      currentCents = nextCurrentCents;
+      investedCents = nextInvestedCents;
+      event.currentAfterCents = currentCents;
+      event.investedAfterCents = investedCents;
+      continue;
+    }
+
+    const nextCurrentCents = currentCents + event.currentDeltaCents;
+    const nextInvestedCents = investedCents + event.investedDeltaCents;
+    if (nextCurrentCents < 0 || nextInvestedCents < 0) {
+      return {
+        ok: false,
+        error: `Deleting this record would make balances negative at ${activity} on ${event.date}.`,
+      };
+    }
+
+    currentCents = nextCurrentCents;
+    investedCents = nextInvestedCents;
+    event.currentAfterCents = currentCents;
+    event.investedAfterCents = investedCents;
+  }
+
+  return { ok: true, currentCents, investedCents };
 }
 
 function appendFamilyEvent(family, payload) {

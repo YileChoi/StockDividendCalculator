@@ -36,13 +36,20 @@ body {
   top: 0.85rem;
   z-index: 40;
   display: flex;
-  gap: 0.45rem;
+  align-items: center;
+  gap: 0.7rem;
   padding: 0.48rem;
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid #d2dfd6;
   border-radius: 14px;
   box-shadow: 0 8px 24px rgba(13, 35, 23, 0.1);
   backdrop-filter: blur(8px);
+}
+
+.topNavTabs {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
 }
 
 .navTab {
@@ -69,6 +76,34 @@ body {
 .navTab:focus-visible {
   outline: 2px solid #6cb68f;
   outline-offset: 2px;
+}
+
+.topNavActions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.topNavActions button {
+  padding: 0.45rem 0.72rem;
+}
+
+.topNavActions .topSaveBtn {
+  background: #6f6f6f;
+  color: #fffdfa;
+  border: none;
+}
+
+.topNavActions .topSaveBtn:hover {
+  filter: brightness(1.04);
+  background: #6f6f6f;
+}
+
+.topNavActions .subtleDanger {
+  background: #fff5f5;
+  color: #812121;
+  border: 1px solid #efc2c2;
 }
 
 .appView {
@@ -582,7 +617,7 @@ button.revertBtn {
   background: #fbfefc;
   color: inherit;
   display: grid;
-  gap: 0.44rem;
+  gap: 0;
   align-content: start;
 }
 
@@ -620,8 +655,17 @@ button.revertBtn {
   align-items: center;
   justify-content: space-between;
   gap: 0.7rem;
+  padding-top: 0;
+}
+
+.memberCardHeader + .memberCardMetric {
   border-top: 1px solid #e3ede6;
-  padding-top: 0.36rem;
+  margin-top: 0.1rem;
+  padding-top: 0.3rem;
+}
+
+.memberCardMetric + .memberCardMetric {
+  margin-top: 0.2rem;
 }
 
 .memberCardMetric span {
@@ -743,11 +787,21 @@ th {
 @media (max-width: 900px) {
   .topNav {
     top: 0.55rem;
-    overflow-x: auto;
+    flex-wrap: wrap;
   }
 
   .navTab {
     white-space: nowrap;
+  }
+
+  .topNavTabs {
+    flex-wrap: wrap;
+  }
+
+  .topNavActions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-end;
   }
 
   .grid {

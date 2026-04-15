@@ -11,7 +11,7 @@ import {
   serializeState,
 } from "./model.js";
 import { renderDoughnutChart } from "./doughnut.js";
-import { initFamilyDashboard } from "./familyDashboard.js";
+import { initFamilyDashboard, saveFamilyDashboardNow } from "./familyDashboard.js";
 
 const API = {
   ledger: "/api/ledger",
@@ -322,12 +322,27 @@ async function handleValuationSubmit(event) {
 }
 
 async function handleManualSave() {
-  const saved = await persistState({ manual: true });
-  if (saved) {
-    setStatus("Saved to data/ledger.json.");
-  } else {
-    setStatus("Failed to save. Is the server running?", true);
+  const [stockSaved, familySaved] = await Promise.all([
+    persistState({ manual: true }),
+    saveFamilyDashboardNow(),
+  ]);
+
+  if (stockSaved && familySaved) {
+    setStatus("Saved stock and family dashboard data.");
+    return;
   }
+
+  if (stockSaved) {
+    setStatus("Saved stock data, but family dashboard save failed.", true);
+    return;
+  }
+
+  if (familySaved) {
+    setStatus("Saved family dashboard data, but stock save failed.", true);
+    return;
+  }
+
+  setStatus("Failed to save stock and family data. Is the server running?", true);
 }
 
 function handleExport() {

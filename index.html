@@ -8,36 +8,38 @@
   </head>
   <body>
     <main class="layout">
-      <nav
-        class="topNav"
-        aria-label="Application sections"
-        role="tablist"
-      >
-        <button
-          type="button"
-          class="navTab isActive"
-          data-view="calculator"
-          id="app-tab-calculator"
-          role="tab"
-          aria-controls="view-calculator"
-          aria-selected="true"
-          aria-current="page"
-        >
-          Stock Equity Dilution Calculator
-        </button>
-        <button
-          type="button"
-          class="navTab"
-          data-view="family-dashboard"
-          id="app-tab-family-dashboard"
-          role="tab"
-          aria-controls="view-family-dashboard"
-          aria-selected="false"
-          tabindex="-1"
-        >
-          Family Investment Dashboard
-        </button>
-      </nav>
+      <div class="topNav" aria-label="Application navigation">
+        <nav class="topNavTabs" aria-label="Application sections" role="tablist">
+          <button
+            type="button"
+            class="navTab isActive"
+            data-view="calculator"
+            id="app-tab-calculator"
+            role="tab"
+            aria-controls="view-calculator"
+            aria-selected="true"
+            aria-current="page"
+          >
+            Stock Equity Dilution Calculator
+          </button>
+          <button
+            type="button"
+            class="navTab"
+            data-view="family-dashboard"
+            id="app-tab-family-dashboard"
+            role="tab"
+            aria-controls="view-family-dashboard"
+            aria-selected="false"
+            tabindex="-1"
+          >
+            Family Investment Dashboard
+          </button>
+        </nav>
+        <div class="topNavActions">
+          <button type="button" id="saveNow" class="topSaveBtn">Save Now</button>
+          <button type="button" id="stopServer" class="danger subtleDanger">Stop Server</button>
+        </div>
+      </div>
 
       <section
         id="view-calculator"
@@ -58,12 +60,8 @@
             <a href="/logic">View Full Calculation Logic</a>
           </p>
           <div class="saveControls">
-            <button type="button" id="saveNow">Save Now</button>
             <button type="button" id="exportDb">Export DB</button>
             <button type="button" id="importDb">Import DB</button>
-            <button type="button" id="stopServer" class="danger subtleDanger">
-              Stop Server
-            </button>
             <input
               id="importFile"
               type="file"
@@ -769,6 +767,7 @@
                     <th>Current After</th>
                     <th>Invested After</th>
                     <th>Note</th>
+                    <th>Remove</th>
                   </tr>
                 </thead>
                 <tbody id="familyEventsTableBody"></tbody>
