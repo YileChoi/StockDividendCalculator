@@ -170,6 +170,19 @@ label {
   gap: 0.38rem;
 }
 
+.fieldGroup {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.fieldTitle > .fieldLabel {
+  display: inline;
+  color: inherit;
+  font-size: inherit;
+}
+
 input,
 select,
 textarea,
@@ -219,8 +232,14 @@ button.revertBtn {
 
 .infoTip {
   appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  box-sizing: border-box;
   width: 1.18rem;
   height: 1.18rem;
+  margin: 0;
   border-radius: 999px;
   border: 1px solid #9bc8b3;
   background: #effaf4;
@@ -243,10 +262,10 @@ button.revertBtn {
 .infoTip:focus-visible::after {
   content: attr(data-tip);
   position: absolute;
-  top: calc(100% + 0.42rem);
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(340px, 75vw);
+  top: 50%;
+  left: calc(100% + 0.62rem);
+  transform: translateY(-50%);
+  width: min(340px, 70vw);
   border-radius: 8px;
   background: #153b2a;
   color: #eafff3;
@@ -258,19 +277,21 @@ button.revertBtn {
   box-shadow: 0 8px 24px rgba(7, 24, 16, 0.24);
   z-index: 25;
   white-space: normal;
+  pointer-events: none;
 }
 
 .infoTip:hover::before,
 .infoTip:focus-visible::before {
   content: "";
   position: absolute;
-  top: calc(100% + 0.1rem);
-  left: 50%;
-  transform: translateX(-50%);
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-bottom: 7px solid #153b2a;
+  top: 50%;
+  left: calc(100% + 0.08rem);
+  transform: translateY(-50%);
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-right: 7px solid #153b2a;
   z-index: 25;
+  pointer-events: none;
 }
 
 .hint {
