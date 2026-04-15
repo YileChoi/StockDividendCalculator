@@ -41,7 +41,8 @@ StockDividendCalculator/
 ├── app.py
 ├── data/
 │ └── ledger.json   (auto-created local DB file)
-├── local.sh
+├── run_local.sh
+├── run_server.py
 ├── index.html
 ├── logic.html
 ├── styles.css
@@ -58,23 +59,24 @@ StockDividendCalculator/
 2. Start server:
 
 ```bash
-./local.sh
+./run_local.sh
 ```
 
 3. Open:
-   - `http://127.0.0.1:5000/` (calculator)
-   - `http://127.0.0.1:5000/logic` (calculation logic page)
+   - Browser opens automatically to the running URL.
+   - If you need it manually, check terminal output for the exact URL.
 
-`local.sh` handles:
+`run_local.sh` handles:
 - Creating `.venv` automatically (first run only).
 - Installing Flask dependencies if missing.
-- Running Flask dev server on `127.0.0.1:5000`.
+- Starting local server and auto-opening browser.
+- Using `5000` first, then next available port if `5000` is busy.
 
 If you get permission denied once, run:
 
 ```bash
-chmod +x ./local.sh
-./local.sh
+chmod +x ./run_local.sh
+./run_local.sh
 ```
 
 ## Waitress (Later Deploy)
@@ -104,11 +106,24 @@ waitress-serve --listen=0.0.0.0:8080 app:app
 - `Import DB` loads a `ledger.json` file into the current machine.
 - Closing browser/server does not erase data; it reloads from `data/ledger.json` on next start.
 
+## App Change History (Revert)
+
+- Separate from transaction history, the app stores an app-level change log with snapshots.
+- Every meaningful change (add member, transaction, reset, import, revert) stores a snapshot.
+- Use `App Change History (With Revert)` table in UI to restore an earlier snapshot.
+- Revert actions are also logged as new app-level changes for traceability.
+
+## Server Controls In UI
+
+- `Stop Server` button is visible in the page header.
+- Pressing it calls server shutdown and then attempts to close the current browser tab automatically.
+- Browser security rules may block auto-close in some cases; if so, close tab manually.
+
 ## Transfer To Another Machine
 
 1. On old machine, click `Export DB` (or copy `data/ledger.json` directly).
 2. Move that file to new machine.
-3. Start server on new machine with `./local.sh`.
+3. Start server on new machine with `./run_local.sh`.
 4. Click `Import DB` and choose the transferred JSON file.
 
 ## Important Operational Discipline

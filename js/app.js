@@ -16,7 +16,11 @@ const API = {
   ledger: "/api/ledger",
   import: "/api/ledger/import",
   export: "/api/ledger/export",
+  stop: "/api/server/stop",
 };
+
+const DB_SCHEMA_VERSION = 1;
+const MAX_CHANGE_HISTORY = 200;
 
 const TX_LABELS = {
   [CONSTANTS.TX_TYPES.DEPOSIT]: "Deposit",
@@ -39,10 +43,12 @@ const els = {
   amountLabel: document.getElementById("amountLabel"),
   membersTableBody: document.getElementById("membersTableBody"),
   transactionsTableBody: document.getElementById("transactionsTableBody"),
+  changesTableBody: document.getElementById("changesTableBody"),
   resetData: document.getElementById("resetData"),
   saveNow: document.getElementById("saveNow"),
   exportDb: document.getElementById("exportDb"),
   importDb: document.getElementById("importDb"),
+  stopServer: document.getElementById("stopServer"),
   importFile: document.getElementById("importFile"),
   autosaveState: document.getElementById("autosaveState"),
   statusMessage: document.getElementById("statusMessage"),
@@ -53,13 +59,32 @@ const els = {
 };
 
 let state = createInitialState();
+let changeHistory = [];
+let nextChangeId = 1;
+
 bindEvents();
 setDefaultDate();
-updateAutosaveState("File DB: disconnected");
+updateAutosaveState("File DB: connecting...");
 void init();
 
 async function init() {
-  state = await loadStateFromServer();
+  const loaded = await loadDbFromServer();
+  state = loaded.state;
+  changeHistory = loaded.changeHistory;
+  nextChangeId = loaded.nextChangeId;
+
+  if (changeHistory.length === 0) {
+    const firstAction = loaded.migratedFromLegacy ? "migrate" : "baseline";
+    const firstSummary = loaded.migratedFromLegacy
+      ? "Migrated legacy ledger and created baseline snapshot."
+      : "Initial baseline snapshot.";
+    appendChangeRecord(firstAction, firstSummary);
+    const saved = await persistState({ manual: true });
+    setStatusWithSaveOutcome("Initialized app-change history.", saved);
+  } else {
+    setStatus("Loaded from data/ledger.json.");
+  }
+
   renderAll();
 }
 
@@ -72,6 +97,8 @@ function bindEvents() {
   els.exportDb.addEventListener("click", handleExport);
   els.importDb.addEventListener("click", handleImportClick);
   els.importFile.addEventListener("change", handleImportFile);
+  els.stopServer.addEventListener("click", handleStopServer);
+  els.changesTableBody.addEventListener("click", handleChangeTableClick);
 }
 
 function setDefaultDate() {
@@ -85,6 +112,10 @@ async function handleMemberSubmit(event) {
 
   try {
     state = addMember(state, els.memberName.value, todayISO());
+    appendChangeRecord(
+      "add_member",
+      `Added person "${els.memberName.value.trim()}".`,
+    );
     const saved = await persistState({ manual: false });
     els.memberName.value = "";
     renderAll();
@@ -118,6 +149,11 @@ async function handleTransactionSubmit(event) {
       throw new Error("Unsupported transaction type.");
     }
 
+    appendChangeRecord(
+      txType,
+      `${TX_LABELS[txType]} recorded${payload.note ? ` (${payload.note})` : ""}.`,
+    );
+
     const saved = await persistState({ manual: false });
     els.txAmount.value = "";
     els.txNote.value = "";
@@ -136,6 +172,7 @@ async function handleReset() {
     return;
   }
   state = createInitialState();
+  appendChangeRecord("reset", "Reset the full ledger state.");
   const saved = await persistState({ manual: true });
   renderAll();
   setStatusWithSaveOutcome("All data reset.", saved);
@@ -146,7 +183,7 @@ async function handleManualSave() {
   if (saved) {
     setStatus("Saved to data/ledger.json.");
   } else {
-    setStatus("Failed to save. Is the Flask server running?", true);
+    setStatus("Failed to save. Is the server running?", true);
   }
 }
 
@@ -168,8 +205,7 @@ async function handleImportFile(event) {
 
   let parsed;
   try {
-    const text = await file.text();
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(await file.text());
   } catch {
     setStatus("Selected file is not valid JSON.", true);
     return;
@@ -180,16 +216,80 @@ async function handleImportFile(event) {
     return;
   }
 
-  const importedState = deserializeState(JSON.stringify(parsed));
-  const saved = await writeImportedState(importedState);
+  const importedDb = normalizeDbPayload(parsed);
+  state = importedDb.state;
+  changeHistory = importedDb.changeHistory;
+  nextChangeId = importedDb.nextChangeId;
+  appendChangeRecord("import", `Imported DB from file "${file.name}".`);
+
+  const saved = await writeDbToServer({ endpoint: API.import });
   if (!saved) {
-    setStatus("Import failed while writing server DB file.", true);
+    setStatus("Import failed while writing data/ledger.json.", true);
     return;
   }
 
-  state = importedState;
   renderAll();
   setStatus(`Imported ${file.name} into data/ledger.json.`);
+}
+
+async function handleStopServer() {
+  const confirmed = window.confirm(
+    "Stop server now? This will end the local session for all open tabs.",
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    const response = await fetch(API.stop, { method: "POST" });
+    if (!response.ok) {
+      throw new Error(`Server stop failed (${response.status}).`);
+    }
+    setStatus("Server is stopping. Attempting to close this tab...");
+    setTimeout(attemptCloseCurrentTab, 300);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+async function handleChangeTableClick(event) {
+  const trigger = event.target.closest("button[data-change-id]");
+  if (!trigger) {
+    return;
+  }
+  const id = Number(trigger.dataset.changeId);
+  if (!Number.isInteger(id) || id <= 0) {
+    return;
+  }
+  await revertToChange(id);
+}
+
+async function revertToChange(changeId) {
+  const target = changeHistory.find((entry) => entry.id === changeId);
+  if (!target) {
+    setStatus("Selected change snapshot not found.", true);
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Restore app state to change #${target.id} (${target.action})?`,
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    state = snapshotToState(target.snapshot);
+    appendChangeRecord(
+      "revert",
+      `Restored snapshot from change #${target.id} (${target.action}).`,
+    );
+    const saved = await persistState({ manual: true });
+    renderAll();
+    setStatusWithSaveOutcome(`Reverted to change #${target.id}.`, saved);
+  } catch {
+    setStatus("Revert failed: snapshot is invalid.", true);
+  }
 }
 
 function renderAll() {
@@ -198,6 +298,7 @@ function renderAll() {
   updateTxFormFields();
   renderMemberTable();
   renderTransactionsTable();
+  renderChangesTable();
 }
 
 function renderOverview() {
@@ -315,70 +416,192 @@ function renderTransactionsTable() {
     .join("");
 }
 
-async function loadStateFromServer() {
+function renderChangesTable() {
+  const rows = [...changeHistory].sort((a, b) => b.id - a.id);
+  if (!rows.length) {
+    els.changesTableBody.innerHTML =
+      '<tr><td colspan="5" class="empty">No app-level changes yet.</td></tr>';
+    return;
+  }
+
+  els.changesTableBody.innerHTML = rows
+    .map((entry) => {
+      return `
+      <tr>
+        <td>#${entry.id}</td>
+        <td>${formatDateTime(entry.occurredAt)}</td>
+        <td>${escapeHtml(entry.action)}</td>
+        <td>${escapeHtml(entry.summary)}</td>
+        <td><button type="button" class="revertBtn" data-change-id="${entry.id}">Revert</button></td>
+      </tr>
+    `;
+    })
+    .join("");
+}
+
+async function loadDbFromServer() {
   try {
     const response = await fetch(API.ledger, { method: "GET" });
     if (!response.ok) {
       throw new Error(`Load failed (${response.status}).`);
     }
     const payload = await response.json();
-    const loadedState = deserializeState(JSON.stringify(payload));
+    const db = normalizeDbPayload(payload);
     updateAutosaveState("File DB: data/ledger.json | connected");
-    setStatus("Loaded from data/ledger.json.");
-    return loadedState;
+    return db;
   } catch (error) {
     updateAutosaveState("File DB: offline");
     setStatus(
       `Could not load file DB from server. Using empty in-memory state. ${error.message}`,
       true,
     );
-    return createInitialState();
+    return {
+      state: createInitialState(),
+      changeHistory: [],
+      nextChangeId: 1,
+      migratedFromLegacy: false,
+    };
   }
 }
 
 async function persistState({ manual }) {
+  const saved = await writeDbToServer({ endpoint: API.ledger });
+  if (!saved) {
+    updateAutosaveState("File DB: save failed");
+    return false;
+  }
+
+  const mode = manual ? "Saved" : "Autosaved";
+  updateAutosaveState(`File DB: data/ledger.json | ${mode} at ${formatTime(new Date())}`);
+  return true;
+}
+
+async function writeDbToServer({ endpoint }) {
   try {
-    const response = await fetch(API.ledger, {
-      method: "PUT",
+    const response = await fetch(endpoint, {
+      method: endpoint === API.import ? "POST" : "PUT",
       headers: { "Content-Type": "application/json" },
-      body: serializeState(state),
+      body: JSON.stringify(buildDbEnvelope()),
     });
     if (!response.ok) {
-      throw new Error(`Save failed (${response.status}).`);
+      throw new Error(`Write failed (${response.status}).`);
     }
-    const payload = await response.json();
-    const stamp = formatIsoToLocalTime(payload.updatedAt);
-    const mode = manual ? "Saved" : "Autosaved";
-    updateAutosaveState(
-      `File DB: ${payload.path ?? "data/ledger.json"} | ${mode} at ${stamp}`,
-    );
     return true;
   } catch {
-    updateAutosaveState("File DB: save failed");
     return false;
   }
 }
 
-async function writeImportedState(importedState) {
-  try {
-    const response = await fetch(API.import, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: serializeState(importedState),
-    });
-    if (!response.ok) {
-      throw new Error(`Import failed (${response.status}).`);
-    }
-    const payload = await response.json();
-    const stamp = formatIsoToLocalTime(payload.updatedAt);
-    updateAutosaveState(
-      `File DB: ${payload.path ?? "data/ledger.json"} | Imported at ${stamp}`,
+function buildDbEnvelope() {
+  return {
+    schemaVersion: DB_SCHEMA_VERSION,
+    state: stateToSnapshot(state),
+    changeHistory: [...changeHistory],
+    nextChangeId,
+  };
+}
+
+function normalizeDbPayload(payload) {
+  if (isDbEnvelope(payload)) {
+    const loadedState = snapshotToState(payload.state);
+    const loadedHistory = normalizeChangeHistory(payload.changeHistory);
+    const maxHistoryId = loadedHistory.reduce(
+      (maxValue, entry) => Math.max(maxValue, entry.id),
+      0,
     );
-    return true;
-  } catch {
-    updateAutosaveState("File DB: import failed");
-    return false;
+    const loadedNextChangeId = sanitizePositiveInt(payload.nextChangeId, 1);
+    return {
+      state: loadedState,
+      changeHistory: loadedHistory,
+      nextChangeId: Math.max(loadedNextChangeId, maxHistoryId + 1),
+      migratedFromLegacy: false,
+    };
   }
+
+  return {
+    state: snapshotToState(payload),
+    changeHistory: [],
+    nextChangeId: 1,
+    migratedFromLegacy: true,
+  };
+}
+
+function isDbEnvelope(payload) {
+  return (
+    payload &&
+    typeof payload === "object" &&
+    !Array.isArray(payload) &&
+    Object.prototype.hasOwnProperty.call(payload, "state")
+  );
+}
+
+function normalizeChangeHistory(history) {
+  if (!Array.isArray(history)) {
+    return [];
+  }
+
+  const normalized = [];
+  for (const entry of history) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const id = sanitizePositiveInt(entry.id, null);
+    if (id === null) {
+      continue;
+    }
+    try {
+      const snapshot = stateToSnapshot(snapshotToState(entry.snapshot));
+      normalized.push({
+        id,
+        occurredAt: sanitizeDateTime(entry.occurredAt),
+        action: sanitizeShortText(entry.action, "change", 40),
+        summary: sanitizeShortText(entry.summary, "State updated.", 220),
+        snapshot,
+      });
+    } catch {
+      continue;
+    }
+  }
+
+  normalized.sort((a, b) => a.id - b.id);
+
+  const deduped = [];
+  const seen = new Set();
+  for (const entry of normalized) {
+    if (seen.has(entry.id)) {
+      continue;
+    }
+    seen.add(entry.id);
+    deduped.push(entry);
+  }
+
+  if (deduped.length > MAX_CHANGE_HISTORY) {
+    return deduped.slice(deduped.length - MAX_CHANGE_HISTORY);
+  }
+  return deduped;
+}
+
+function appendChangeRecord(action, summary) {
+  changeHistory.push({
+    id: nextChangeId,
+    occurredAt: new Date().toISOString(),
+    action: sanitizeShortText(action, "change", 40),
+    summary: sanitizeShortText(summary, "State updated.", 220),
+    snapshot: stateToSnapshot(state),
+  });
+  nextChangeId += 1;
+
+  if (changeHistory.length > MAX_CHANGE_HISTORY) {
+    changeHistory = changeHistory.slice(changeHistory.length - MAX_CHANGE_HISTORY);
+  }
+}
+
+function stateToSnapshot(targetState) {
+  return JSON.parse(serializeState(targetState));
+}
+
+function snapshotToState(snapshot) {
+  return deserializeState(JSON.stringify(snapshot));
 }
 
 function setStatus(message, isError = false) {
@@ -405,6 +628,15 @@ function updateAutosaveState(message) {
 function findMemberName(memberId) {
   const member = state.members.find((item) => item.id === memberId);
   return member ? member.name : "Unknown";
+}
+
+function attemptCloseCurrentTab() {
+  try {
+    window.open("about:blank", "_self");
+    window.close();
+  } catch {
+    // Browser may block scripted tab close.
+  }
 }
 
 function formatCents(cents) {
@@ -468,15 +700,44 @@ function formatNavFromSnapshot(tx) {
   });
 }
 
-function formatIsoToLocalTime(value) {
-  if (!value) {
-    return formatTime(new Date());
-  }
+function formatDateTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return formatTime(new Date());
+    return "Invalid date";
   }
-  return formatTime(date);
+  return date.toLocaleString("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
+function sanitizeDateTime(value) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return new Date().toISOString();
+  }
+  return parsed.toISOString();
+}
+
+function sanitizeShortText(value, fallback, maxLength) {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  const cleaned = value.trim().replace(/\s+/g, " ").slice(0, maxLength);
+  return cleaned || fallback;
+}
+
+function sanitizePositiveInt(value, fallback) {
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric) || numeric <= 0) {
+    return fallback;
+  }
+  return numeric;
 }
 
 function escapeHtml(value) {

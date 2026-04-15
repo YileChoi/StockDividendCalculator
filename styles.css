@@ -80,6 +80,12 @@ body {
   padding: 0.45rem 0.7rem;
 }
 
+.saveControls .subtleDanger {
+  background: #fff5f5;
+  color: #812121;
+  border-color: #efc2c2;
+}
+
 .autosaveState {
   display: inline-block;
   background: rgba(255, 255, 255, 0.18);
@@ -192,6 +198,11 @@ button:hover {
 
 button.danger {
   background: var(--danger);
+}
+
+button.revertBtn {
+  padding: 0.36rem 0.55rem;
+  font-size: 0.84rem;
 }
 
 .hint {

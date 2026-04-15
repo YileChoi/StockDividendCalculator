@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -14,13 +16,18 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 LEDGER_FILE = DATA_DIR / "ledger.json"
 DEFAULT_LEDGER = {
-    "version": 1,
-    "members": [],
-    "totalUnitsMicro": {"__bigint": "0"},
-    "portfolioCents": {"__bigint": "0"},
-    "transactions": [],
-    "nextMemberId": 1,
-    "nextTransactionId": 1,
+    "schemaVersion": 1,
+    "state": {
+        "version": 1,
+        "members": [],
+        "totalUnitsMicro": {"__bigint": "0"},
+        "portfolioCents": {"__bigint": "0"},
+        "transactions": [],
+        "nextMemberId": 1,
+        "nextTransactionId": 1,
+    },
+    "changeHistory": [],
+    "nextChangeId": 1,
 }
 
 
@@ -131,6 +138,37 @@ def export_ledger():
         as_attachment=True,
         download_name="ledger.json",
     )
+
+
+@app.get("/api/server/status")
+def server_status():
+    return jsonify(
+        {
+            "ok": True,
+            "host": app.config.get("APP_HOST", "127.0.0.1"),
+            "port": app.config.get("APP_PORT"),
+        }
+    )
+
+
+@app.post("/api/server/stop")
+def stop_server():
+    def stop_later(fn) -> None:
+        # Small delay allows HTTP response to flush before shutdown.
+        time.sleep(0.2)
+        fn()
+
+    callback = app.config.get("STOP_SERVER_CALLBACK")
+    if callable(callback):
+        threading.Thread(target=stop_later, args=(callback,), daemon=True).start()
+        return jsonify({"ok": True, "stopping": True})
+
+    shutdown_func = request.environ.get("werkzeug.server.shutdown")
+    if shutdown_func is not None:
+        threading.Thread(target=stop_later, args=(shutdown_func,), daemon=True).start()
+        return jsonify({"ok": True, "stopping": True})
+
+    return jsonify({"ok": False, "error": "Server stop is not available."}), 500
 
 
 if __name__ == "__main__":
