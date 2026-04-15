@@ -22,6 +22,7 @@ const API = {
 
 const DB_SCHEMA_VERSION = 1;
 const MAX_CHANGE_HISTORY = 200;
+const NETWORK_TIMEOUT_MS = 8000;
 
 const TX_LABELS = {
   [CONSTANTS.TX_TYPES.DEPOSIT]: "Deposit",
@@ -334,14 +335,14 @@ async function handleStopServer() {
   }
 
   try {
-    const response = await fetch(API.stop, { method: "POST" });
+    const response = await fetchWithTimeout(API.stop, { method: "POST" });
     if (!response.ok) {
       throw new Error(`Server stop failed (${response.status}).`);
     }
     setStatus("Server is stopping. Attempting to close this tab...");
     setTimeout(attemptCloseCurrentTab, 300);
   } catch (error) {
-    setStatus(error.message, true);
+    setStatus(toErrorMessage(error, "Server stop request failed."), true);
   }
 }
 
@@ -581,7 +582,7 @@ function renderChangesTable() {
 
 async function loadDbFromServer() {
   try {
-    const response = await fetch(API.ledger, { method: "GET" });
+    const response = await fetchWithTimeout(API.ledger, { method: "GET" });
     if (!response.ok) {
       throw new Error(`Load failed (${response.status}).`);
     }
@@ -592,7 +593,7 @@ async function loadDbFromServer() {
   } catch (error) {
     updateAutosaveState("File DB: offline");
     setStatus(
-      `Could not load file DB from server. Using empty in-memory state. ${error.message}`,
+      `Could not load file DB from server. Using empty in-memory state. ${toErrorMessage(error, "Unknown network error.")}`,
       true,
     );
     return {
@@ -618,7 +619,7 @@ async function persistState({ manual }) {
 
 async function writeDbToServer({ endpoint }) {
   try {
-    const response = await fetch(endpoint, {
+    const response = await fetchWithTimeout(endpoint, {
       method: endpoint === API.import ? "POST" : "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(buildDbEnvelope()),
@@ -630,6 +631,28 @@ async function writeDbToServer({ endpoint }) {
   } catch {
     return false;
   }
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = NETWORK_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timerId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`Request timed out after ${Math.ceil(timeoutMs / 1000)}s.`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timerId);
+  }
+}
+
+function toErrorMessage(error, fallback) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
 }
 
 function buildDbEnvelope() {

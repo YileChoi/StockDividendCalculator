@@ -8,9 +8,12 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 from flask import Flask, jsonify, request, send_file, send_from_directory
+from werkzeug.exceptions import RequestEntityTooLarge
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024  # 2 MB
+
+MAX_REQUEST_BYTES = 20 * 1024 * 1024  # 20 MB
+app.config["MAX_CONTENT_LENGTH"] = MAX_REQUEST_BYTES
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
@@ -113,6 +116,23 @@ def _write_family_db(payload: dict) -> None:
 
 def _updated_at_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def payload_too_large(_error):
+    max_mb = MAX_REQUEST_BYTES // (1024 * 1024)
+    return (
+        jsonify(
+            {
+                "ok": False,
+                "error": (
+                    f"Request body is too large. "
+                    f"Maximum supported size is {max_mb} MB."
+                ),
+            }
+        ),
+        413,
+    )
 
 
 @app.get("/")

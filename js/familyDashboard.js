@@ -8,6 +8,7 @@ const API = {
 };
 
 const SCHEMA_VERSION = 1;
+const NETWORK_TIMEOUT_MS = 8000;
 
 export function initFamilyDashboard() {
   const els = collectElements();
@@ -795,7 +796,7 @@ function getMemberSummaries(accounts) {
 
 async function loadDbFromServer() {
   try {
-    const response = await fetch(API.db, { method: "GET" });
+    const response = await fetchWithTimeout(API.db, { method: "GET" });
     if (!response.ok) {
       throw new Error(`Family DB load failed (${response.status}).`);
     }
@@ -808,7 +809,7 @@ async function loadDbFromServer() {
 
 async function persistDb(ctx, { endpoint }) {
   try {
-    const response = await fetch(endpoint, {
+    const response = await fetchWithTimeout(endpoint, {
       method: endpoint === API.import ? "POST" : "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(buildDbEnvelope(ctx.db)),
@@ -824,6 +825,21 @@ async function persistDb(ctx, { endpoint }) {
   } catch {
     setDbState(ctx.els, "Family DB: save failed");
     return false;
+  }
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = NETWORK_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timerId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`Request timed out after ${Math.ceil(timeoutMs / 1000)}s.`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timerId);
   }
 }
 
