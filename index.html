@@ -8,321 +8,543 @@
   </head>
   <body>
     <main class="layout">
-      <header class="hero">
-        <h1>Stock Equity Dilution Calculator</h1>
-        <p>
-          Track each family member's fair ownership using a unit/NAV model. Every
-          deposit buys units at the current value, every withdrawal redeems units,
-          and market profit/loss updates each member proportionally.
-        </p>
-        <p class="heroLinks">
-          <a href="/logic">View Full Calculation Logic</a>
-        </p>
-        <div class="saveControls">
-          <button type="button" id="saveNow">Save Now</button>
-          <button type="button" id="exportDb">Export DB</button>
-          <button type="button" id="importDb">Import DB</button>
-          <button type="button" id="stopServer" class="danger subtleDanger">
-            Stop Server
-          </button>
-          <input id="importFile" type="file" accept=".json,application/json" hidden />
-          <span id="autosaveState" class="autosaveState">Autosave: ON</span>
-        </div>
-      </header>
+      <nav class="topNav" aria-label="Application sections">
+        <button
+          type="button"
+          class="navTab isActive"
+          data-view="calculator"
+          aria-current="page"
+        >
+          Stock Equity Dilution Calculator
+        </button>
+        <button type="button" class="navTab" data-view="family-dashboard">
+          Family Investment Dashboard
+        </button>
+      </nav>
 
-      <section class="panel">
-        <h2>Fund Overview</h2>
-        <div class="stats">
-          <article class="stat">
-            <span class="label">Portfolio Value</span>
-            <strong id="statPortfolio">$0.00</strong>
-          </article>
-          <article class="stat">
-            <span class="label">
-              NAV Per Unit
-              <button
-                type="button"
-                class="infoTip"
-                aria-label="What is NAV per unit?"
-                data-tip="NAV means Net Asset Value per unit. It is the current value of one ownership unit: Portfolio Value divided by Total Units."
-              >
-                ?
-              </button>
-            </span>
-            <strong id="statNav">$1.0000</strong>
-          </article>
-          <article class="stat">
-            <span class="label">Total Units</span>
-            <strong id="statUnits">0</strong>
-          </article>
-          <article class="stat">
-            <span class="label">People</span>
-            <strong id="statMembers">0</strong>
-          </article>
-        </div>
-      </section>
-
-      <section class="grid">
-        <section class="panel">
-          <h2>Add Person</h2>
-          <form id="memberForm" class="stack">
-            <label>
-              Name
-              <input
-                id="memberName"
-                name="memberName"
-                type="text"
-                placeholder="e.g. Alex"
-                maxlength="60"
-                required
-              />
-            </label>
-            <button type="submit">Add Person</button>
-          </form>
-        </section>
+      <section
+        id="view-calculator"
+        class="appView isActive"
+        data-view-panel="calculator"
+      >
+        <header class="hero">
+          <h1>Stock Equity Dilution Calculator</h1>
+          <p>
+            Track each family member's fair ownership using a unit/NAV model.
+            Every deposit buys units at the current value, every withdrawal
+            redeems units, and market profit/loss updates each member
+            proportionally.
+          </p>
+          <p class="heroLinks">
+            <a href="/logic">View Full Calculation Logic</a>
+          </p>
+          <div class="saveControls">
+            <button type="button" id="saveNow">Save Now</button>
+            <button type="button" id="exportDb">Export DB</button>
+            <button type="button" id="importDb">Import DB</button>
+            <button type="button" id="stopServer" class="danger subtleDanger">
+              Stop Server
+            </button>
+            <input
+              id="importFile"
+              type="file"
+              accept=".json,application/json"
+              hidden
+            />
+            <span id="autosaveState" class="autosaveState">Autosave: ON</span>
+          </div>
+        </header>
 
         <section class="panel">
-          <h2>Record Activity</h2>
-          <form id="transactionForm" class="stack">
-            <label>
-              Date
-              <input id="txDate" name="txDate" type="date" required />
-            </label>
-
-            <label>
-              Activity Type
-              <select id="txType" name="txType">
-                <option value="deposit">Deposit (Cash In)</option>
-                <option value="withdrawal">Withdrawal (Cash Out)</option>
-              </select>
-            </label>
-
-            <label id="memberField">
-              Person
-              <select id="txMember" name="txMember" required></select>
-            </label>
-
-            <label id="amountField">
-              <span id="amountLabel" class="fieldTitle">
-                Amount
+          <h2>Fund Overview</h2>
+          <div class="stats">
+            <article class="stat">
+              <span class="label">Portfolio Value</span>
+              <strong id="statPortfolio">$0.00</strong>
+            </article>
+            <article class="stat">
+              <span class="label">
+                NAV Per Unit
                 <button
                   type="button"
                   class="infoTip"
-                  aria-label="Amount help"
-                  data-tip="Enter the exact cash amount for the selected activity type."
+                  aria-label="What is NAV per unit?"
+                  data-tip="NAV means Net Asset Value per unit. It is the current value of one ownership unit: Portfolio Value divided by Total Units."
+                >
+                  ?
+                </button>
+              </span>
+              <strong id="statNav">$1.0000</strong>
+            </article>
+            <article class="stat">
+              <span class="label">Total Units</span>
+              <strong id="statUnits">0</strong>
+            </article>
+            <article class="stat">
+              <span class="label">People</span>
+              <strong id="statMembers">0</strong>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Member Equity / Dividend Distribution</h2>
+          <p class="hint">
+            Doughnut chart of each member's current equity share from the latest
+            portfolio value.
+          </p>
+          <div class="chartBlock">
+            <canvas
+              id="equityDistributionChart"
+              class="chartCanvas"
+              width="320"
+              height="320"
+              aria-label="Member equity distribution chart"
+              role="img"
+            ></canvas>
+            <ul id="equityDistributionLegend" class="chartLegend"></ul>
+          </div>
+        </section>
+
+        <section class="grid">
+          <section class="panel">
+            <h2>Add Person</h2>
+            <form id="memberForm" class="stack">
+              <label>
+                Name
+                <input
+                  id="memberName"
+                  name="memberName"
+                  type="text"
+                  placeholder="e.g. Alex"
+                  maxlength="60"
+                  required
+                />
+              </label>
+              <button type="submit">Add Person</button>
+            </form>
+          </section>
+
+          <section class="panel">
+            <h2>Record Activity</h2>
+            <form id="transactionForm" class="stack">
+              <label>
+                Date
+                <input id="txDate" name="txDate" type="date" required />
+              </label>
+
+              <label>
+                Activity Type
+                <select id="txType" name="txType">
+                  <option value="deposit">Deposit (Cash In)</option>
+                  <option value="withdrawal">Withdrawal (Cash Out)</option>
+                </select>
+              </label>
+
+              <label id="memberField">
+                Person
+                <select id="txMember" name="txMember" required></select>
+              </label>
+
+              <label id="amountField">
+                <span id="amountLabel" class="fieldTitle">
+                  <span id="amountLabelText">Amount</span>
+                  <button
+                    type="button"
+                    class="infoTip"
+                    aria-label="Amount help"
+                    data-tip="Enter the exact cash amount for the selected activity type."
+                  >
+                    ?
+                  </button>
+                </span>
+                <input
+                  id="txAmount"
+                  name="txAmount"
+                  type="number"
+                  inputmode="decimal"
+                  step="0.01"
+                  min="0"
+                  required
+                />
+              </label>
+
+              <label>
+                Note (Optional)
+                <textarea
+                  id="txNote"
+                  name="txNote"
+                  rows="2"
+                  maxlength="180"
+                  placeholder="Broker transfer, family payout, monthly valuation, ..."
+                ></textarea>
+              </label>
+
+              <button type="submit">Save Activity</button>
+              <p id="txHint" class="hint"></p>
+            </form>
+          </section>
+        </section>
+
+        <section class="panel">
+          <h2 class="headingWithTip">
+            Manual Total Account Update
+            <button
+              type="button"
+              class="infoTip"
+              aria-label="Manual total update help"
+              data-tip="Use this when your broker shows a new total account value. The app calculates the difference from the previous value and updates total profit."
+            >
+              ?
+            </button>
+          </h2>
+          <p class="hint">
+            Use this when your broker account changed and you need to manually set
+            the latest total value. The app records the difference and calculates
+            total profit automatically.
+          </p>
+          <form id="valuationForm" class="stack valuationForm">
+            <label>
+              Date
+              <input id="valuationDate" name="valuationDate" type="date" required />
+            </label>
+
+            <div class="fieldGroup">
+              <span class="fieldTitle">
+                <label for="valuationAmount" class="fieldLabel"
+                  >New Total Account Value</label
+                >
+                <button
+                  type="button"
+                  class="infoTip"
+                  aria-label="New total account value help"
+                  data-tip="Enter the full current account value from your broker (not the gain amount)."
                 >
                   ?
                 </button>
               </span>
               <input
-                id="txAmount"
-                name="txAmount"
+                id="valuationAmount"
+                name="valuationAmount"
                 type="number"
                 inputmode="decimal"
                 step="0.01"
                 min="0"
                 required
               />
-            </label>
+            </div>
 
             <label>
               Note (Optional)
               <textarea
-                id="txNote"
-                name="txNote"
+                id="valuationNote"
+                name="valuationNote"
                 rows="2"
                 maxlength="180"
-                placeholder="Broker transfer, family payout, monthly valuation, ..."
+                placeholder="Broker total update, month-end value, ..."
               ></textarea>
             </label>
 
-            <button type="submit">Save Activity</button>
-            <p id="txHint" class="hint"></p>
+            <button type="submit">Update Total Value</button>
           </form>
+
+          <div class="stats valuationStats">
+            <article class="stat">
+              <span class="label">Previous Total</span>
+              <strong id="valuationPrevious">$0.00</strong>
+            </article>
+            <article class="stat">
+              <span class="label">
+                Last Update Difference
+                <button
+                  type="button"
+                  class="infoTip"
+                  aria-label="Last update difference help"
+                  data-tip="Difference between the latest manually entered total value and the previous portfolio value."
+                >
+                  ?
+                </button>
+              </span>
+              <strong id="valuationDiff">$0.00</strong>
+            </article>
+            <article class="stat">
+              <span class="label">
+                Total Profit
+                <button
+                  type="button"
+                  class="infoTip"
+                  aria-label="Total profit help"
+                  data-tip="Total Profit = Current Portfolio Value minus Net Cash In (all deposits minus all withdrawals)."
+                >
+                  ?
+                </button>
+              </span>
+              <strong id="valuationTotalProfit">$0.00</strong>
+            </article>
+          </div>
         </section>
-      </section>
 
-      <section class="panel">
-        <h2 class="headingWithTip">
-          Manual Total Account Update
-          <button
-            type="button"
-            class="infoTip"
-            aria-label="Manual total update help"
-            data-tip="Use this when your broker shows a new total account value. The app calculates the difference from the previous value and updates total profit."
-          >
-            ?
-          </button>
-        </h2>
-        <p class="hint">
-          Use this when your broker account changed and you need to manually set
-          the latest total value. The app records the difference and calculates
-          total profit automatically.
-        </p>
-        <form id="valuationForm" class="stack valuationForm">
-          <label>
-            Date
-            <input id="valuationDate" name="valuationDate" type="date" required />
-          </label>
+        <section class="panel">
+          <h2 class="headingWithTip">
+            Ownership Snapshot
+            <button
+              type="button"
+              class="infoTip"
+              aria-label="Ownership snapshot help"
+              data-tip="Shows each person's current units, ownership percentage, equity value, and net profit/loss based on all recorded activity."
+            >
+              ?
+            </button>
+          </h2>
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Person</th>
+                  <th>Units</th>
+                  <th>Ownership</th>
+                  <th>Current Equity</th>
+                  <th>Total In</th>
+                  <th>Total Out</th>
+                  <th>Net P/L</th>
+                </tr>
+              </thead>
+              <tbody id="membersTableBody"></tbody>
+            </table>
+          </div>
+        </section>
 
-          <div class="fieldGroup">
-            <span class="fieldTitle">
-              <label for="valuationAmount" class="fieldLabel"
-                >New Total Account Value</label
-              >
-              <button
-                type="button"
-                class="infoTip"
-                aria-label="New total account value help"
-                data-tip="Enter the full current account value from your broker (not the gain amount)."
-              >
-                ?
-              </button>
-            </span>
-            <input
-              id="valuationAmount"
-              name="valuationAmount"
-              type="number"
-              inputmode="decimal"
-              step="0.01"
-              min="0"
-              required
-            />
+        <section class="panel">
+          <div class="panelRow">
+            <h2>Transaction History</h2>
           </div>
 
-          <label>
-            Note (Optional)
-            <textarea
-              id="valuationNote"
-              name="valuationNote"
-              rows="2"
-              maxlength="180"
-              placeholder="Broker total update, month-end value, ..."
-            ></textarea>
-          </label>
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Person</th>
+                  <th>Cash Amount</th>
+                  <th>Units</th>
+                  <th>NAV After</th>
+                  <th>Portfolio After</th>
+                  <th>Note</th>
+                </tr>
+              </thead>
+              <tbody id="transactionsTableBody"></tbody>
+            </table>
+          </div>
+        </section>
 
-          <button type="submit">Update Total Value</button>
-        </form>
+        <section class="panel">
+          <h2 class="headingWithTip">
+            App Change History (With Revert)
+            <button
+              type="button"
+              class="infoTip"
+              aria-label="App change history help"
+              data-tip="This is different from transaction history. It tracks app-level snapshots and lets you revert to a previous full state if you made a mistake."
+            >
+              ?
+            </button>
+          </h2>
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Change #</th>
+                  <th>When</th>
+                  <th>Action</th>
+                  <th>Summary</th>
+                  <th>Restore</th>
+                </tr>
+              </thead>
+              <tbody id="changesTableBody"></tbody>
+            </table>
+          </div>
+        </section>
 
-        <div class="stats valuationStats">
-          <article class="stat">
-            <span class="label">Previous Total</span>
-            <strong id="valuationPrevious">$0.00</strong>
-          </article>
-          <article class="stat">
-            <span class="label">
-              Last Update Difference
-              <button
-                type="button"
-                class="infoTip"
-                aria-label="Last update difference help"
-                data-tip="Difference between the latest manually entered total value and the previous portfolio value."
-              >
-                ?
+        <p id="statusMessage" class="status" aria-live="polite"></p>
+      </section>
+
+      <section id="view-family-dashboard" class="appView" data-view-panel="family-dashboard" hidden>
+        <header class="hero heroFamily">
+          <h1>Family Investment Dashboard</h1>
+          <p>
+            Track each family member's account balances and cost basis separately
+            from the equity dilution calculator.
+          </p>
+          <p class="hint onHero">
+            This section uses independent inputs and independent local data.
+          </p>
+        </header>
+
+        <section class="panel">
+          <h2>Dashboard Overview</h2>
+          <div class="stats familyStats">
+            <article class="stat">
+              <span class="label">Total Family Value</span>
+              <strong id="familyStatTotalValue">$0.00</strong>
+            </article>
+            <article class="stat">
+              <span class="label">Total Invested (Cost Basis)</span>
+              <strong id="familyStatTotalInvested">$0.00</strong>
+            </article>
+            <article class="stat">
+              <span class="label">Total Net P/L</span>
+              <strong id="familyStatNet">$0.00</strong>
+            </article>
+            <article class="stat">
+              <span class="label">Tracked Accounts</span>
+              <strong id="familyStatAccountCount">0</strong>
+            </article>
+          </div>
+        </section>
+
+        <section class="grid familyGrid">
+          <section class="panel">
+            <h2>Add Or Update Account</h2>
+            <form id="familyAccountForm" class="stack">
+              <input id="familyAccountId" type="hidden" />
+
+              <label>
+                Family Member Name
+                <input
+                  id="familyMemberName"
+                  name="familyMemberName"
+                  type="text"
+                  maxlength="60"
+                  placeholder="e.g. Alex"
+                  required
+                />
+              </label>
+
+              <label>
+                Account Name
+                <input
+                  id="familyAccountName"
+                  name="familyAccountName"
+                  type="text"
+                  maxlength="80"
+                  placeholder="e.g. Brokerage - TFSA"
+                  required
+                />
+              </label>
+
+              <label>
+                Current Account Value
+                <input
+                  id="familyCurrentValue"
+                  name="familyCurrentValue"
+                  type="number"
+                  inputmode="decimal"
+                  step="0.01"
+                  min="0"
+                  required
+                />
+              </label>
+
+              <label>
+                Invested Amount (Cost Basis)
+                <input
+                  id="familyInvestedValue"
+                  name="familyInvestedValue"
+                  type="number"
+                  inputmode="decimal"
+                  step="0.01"
+                  min="0"
+                  required
+                />
+              </label>
+
+              <label>
+                Note (Optional)
+                <textarea
+                  id="familyAccountNote"
+                  name="familyAccountNote"
+                  rows="2"
+                  maxlength="180"
+                  placeholder="Broker, strategy, or comments..."
+                ></textarea>
+              </label>
+
+              <div class="inlineActions">
+                <button id="familySaveAccount" type="submit">Save Account</button>
+                <button id="familyCancelEdit" type="button" class="ghostBtn" hidden>
+                  Cancel Edit
+                </button>
+              </div>
+            </form>
+            <p id="familyFormHint" class="hint">
+              Each account stores current value and cost basis so individual and
+              family-level profit/loss can be tracked.
+            </p>
+          </section>
+
+          <section class="panel">
+            <h2>Family Allocation (Doughnut)</h2>
+            <p class="hint">
+              Sum of all individual account values grouped by family member.
+            </p>
+            <div class="chartBlock">
+              <canvas
+                id="familyAllocationChart"
+                class="chartCanvas"
+                width="320"
+                height="320"
+                aria-label="Family allocation doughnut chart"
+                role="img"
+              ></canvas>
+              <ul id="familyAllocationLegend" class="chartLegend"></ul>
+            </div>
+          </section>
+        </section>
+
+        <section class="panel">
+          <h2>Member Profit/Loss Summary</h2>
+          <div id="familyMemberCards" class="memberCards"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panelRow">
+            <h2>Tracked Accounts</h2>
+            <div class="inlineActions">
+              <button id="familyExport" type="button">Export</button>
+              <button id="familyImport" type="button">Import</button>
+              <button id="familyReset" type="button" class="danger subtleDanger">
+                Reset
               </button>
-            </span>
-            <strong id="valuationDiff">$0.00</strong>
-          </article>
-          <article class="stat">
-            <span class="label">
-              Total Profit
-              <button
-                type="button"
-                class="infoTip"
-                aria-label="Total profit help"
-                data-tip="Total Profit = Current Portfolio Value minus Net Cash In (all deposits minus all withdrawals)."
-              >
-                ?
-              </button>
-            </span>
-            <strong id="valuationTotalProfit">$0.00</strong>
-          </article>
-        </div>
+              <input
+                id="familyImportFile"
+                type="file"
+                accept=".json,application/json"
+                hidden
+              />
+            </div>
+          </div>
+
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th>Account</th>
+                  <th>Current Value</th>
+                  <th>Invested</th>
+                  <th>Net P/L</th>
+                  <th>Note</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="familyAccountsTableBody"></tbody>
+            </table>
+          </div>
+
+          <p id="familyStatusMessage" class="status" aria-live="polite"></p>
+        </section>
       </section>
-
-      <section class="panel">
-        <h2 class="headingWithTip">
-          Ownership Snapshot
-          <button
-            type="button"
-            class="infoTip"
-            aria-label="Ownership snapshot help"
-            data-tip="Shows each person's current units, ownership percentage, equity value, and net profit/loss based on all recorded activity."
-          >
-            ?
-          </button>
-        </h2>
-        <div class="tableWrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Person</th>
-                <th>Units</th>
-                <th>Ownership</th>
-                <th>Current Equity</th>
-                <th>Total In</th>
-                <th>Total Out</th>
-                <th>Net P/L</th>
-              </tr>
-            </thead>
-            <tbody id="membersTableBody"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="panelRow">
-          <h2>Transaction History</h2>
-        </div>
-
-        <div class="tableWrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Type</th>
-                <th>Person</th>
-                <th>Cash Amount</th>
-                <th>Units</th>
-                <th>NAV After</th>
-                <th>Portfolio After</th>
-                <th>Note</th>
-              </tr>
-            </thead>
-            <tbody id="transactionsTableBody"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2 class="headingWithTip">
-          App Change History (With Revert)
-          <button
-            type="button"
-            class="infoTip"
-            aria-label="App change history help"
-            data-tip="This is different from transaction history. It tracks app-level snapshots and lets you revert to a previous full state if you made a mistake."
-          >
-            ?
-          </button>
-        </h2>
-        <div class="tableWrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Change #</th>
-                <th>When</th>
-                <th>Action</th>
-                <th>Summary</th>
-                <th>Restore</th>
-              </tr>
-            </thead>
-            <tbody id="changesTableBody"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <p id="statusMessage" class="status" aria-live="polite"></p>
     </main>
 
     <script type="module" src="./js/app.js"></script>

@@ -10,6 +10,7 @@ import {
   getNavCentsPerUnit,
   serializeState,
 } from "./model.js";
+import { renderDoughnutChart } from "./doughnut.js";
 
 const API = {
   ledger: "/api/ledger",
@@ -29,6 +30,8 @@ const TX_LABELS = {
 };
 
 const els = {
+  navTabs: Array.from(document.querySelectorAll(".navTab[data-view]")),
+  viewPanels: Array.from(document.querySelectorAll("[data-view-panel]")),
   memberForm: document.getElementById("memberForm"),
   memberName: document.getElementById("memberName"),
   transactionForm: document.getElementById("transactionForm"),
@@ -44,6 +47,7 @@ const els = {
   txHint: document.getElementById("txHint"),
   memberField: document.getElementById("memberField"),
   amountLabel: document.getElementById("amountLabel"),
+  amountLabelText: document.getElementById("amountLabelText"),
   membersTableBody: document.getElementById("membersTableBody"),
   transactionsTableBody: document.getElementById("transactionsTableBody"),
   changesTableBody: document.getElementById("changesTableBody"),
@@ -58,6 +62,8 @@ const els = {
   statNav: document.getElementById("statNav"),
   statUnits: document.getElementById("statUnits"),
   statMembers: document.getElementById("statMembers"),
+  equityDistributionChart: document.getElementById("equityDistributionChart"),
+  equityDistributionLegend: document.getElementById("equityDistributionLegend"),
   valuationPrevious: document.getElementById("valuationPrevious"),
   valuationDiff: document.getElementById("valuationDiff"),
   valuationTotalProfit: document.getElementById("valuationTotalProfit"),
@@ -66,8 +72,10 @@ const els = {
 let state = createInitialState();
 let changeHistory = [];
 let nextChangeId = 1;
+let activeView = "calculator";
 
 bindEvents();
+initNavigation();
 setDefaultDate();
 updateAutosaveState("File DB: connecting...");
 void init();
@@ -94,6 +102,7 @@ async function init() {
 }
 
 function bindEvents() {
+  els.navTabs.forEach((tab) => tab.addEventListener("click", handleNavClick));
   els.memberForm.addEventListener("submit", handleMemberSubmit);
   els.transactionForm.addEventListener("submit", handleTransactionSubmit);
   els.valuationForm.addEventListener("submit", handleValuationSubmit);
@@ -104,6 +113,63 @@ function bindEvents() {
   els.importFile.addEventListener("change", handleImportFile);
   els.stopServer.addEventListener("click", handleStopServer);
   els.changesTableBody.addEventListener("click", handleChangeTableClick);
+}
+
+function initNavigation() {
+  window.addEventListener("hashchange", handleHashChange);
+  const hashView = sanitizeView(window.location.hash.slice(1));
+  setActiveView(hashView || "calculator", { updateHash: false });
+}
+
+function handleNavClick(event) {
+  const target = event.currentTarget;
+  const view = sanitizeView(target?.dataset?.view);
+  if (!view) {
+    return;
+  }
+  setActiveView(view, { updateHash: true });
+}
+
+function handleHashChange() {
+  const hashView = sanitizeView(window.location.hash.slice(1));
+  if (!hashView || hashView === activeView) {
+    return;
+  }
+  setActiveView(hashView, { updateHash: false });
+}
+
+function setActiveView(view, { updateHash }) {
+  if (view === activeView && updateHash === false) {
+    return;
+  }
+  activeView = view;
+
+  for (const tab of els.navTabs) {
+    const isActive = tab.dataset.view === view;
+    tab.classList.toggle("isActive", isActive);
+    if (isActive) {
+      tab.setAttribute("aria-current", "page");
+    } else {
+      tab.removeAttribute("aria-current");
+    }
+  }
+
+  for (const panel of els.viewPanels) {
+    const isActive = panel.dataset.viewPanel === view;
+    panel.classList.toggle("isActive", isActive);
+    panel.hidden = !isActive;
+  }
+
+  if (updateHash && window.location.hash !== `#${view}`) {
+    window.location.hash = view;
+  }
+}
+
+function sanitizeView(value) {
+  if (value === "calculator" || value === "family-dashboard") {
+    return value;
+  }
+  return "";
 }
 
 function setDefaultDate() {
@@ -319,6 +385,7 @@ function renderAll() {
   renderMemberOptions();
   updateTxFormFields();
   renderValuationSummary();
+  renderEquityDistributionChart();
   renderMemberTable();
   renderTransactionsTable();
   renderChangesTable();
@@ -356,12 +423,16 @@ function updateTxFormFields() {
   els.txMember.required = needsPerson;
 
   if (txType === CONSTANTS.TX_TYPES.DEPOSIT) {
-    els.amountLabel.textContent = "Amount (cash in)";
+    if (els.amountLabelText) {
+      els.amountLabelText.textContent = "Amount (cash in)";
+    }
     els.txAmount.min = "0.01";
     els.txHint.textContent =
       "Deposit buys units at current NAV. Late entries cannot claim earlier profit.";
   } else {
-    els.amountLabel.textContent = "Amount (cash out)";
+    if (els.amountLabelText) {
+      els.amountLabelText.textContent = "Amount (cash out)";
+    }
     els.txAmount.min = "0.01";
     els.txHint.textContent =
       "Withdrawal redeems units at current NAV based on the selected person's owned units. For market/account value changes, use Manual Total Account Update.";
@@ -391,6 +462,32 @@ function renderValuationSummary() {
   els.valuationPrevious.textContent = formatCents(previousTotalCents);
   els.valuationDiff.textContent = formatSignedCents(lastDiffCents);
   els.valuationTotalProfit.textContent = formatSignedCents(totalProfitCents);
+}
+
+function renderEquityDistributionChart() {
+  const summaries = getMemberSummaries(state);
+  let totalEquityCents = 0n;
+  const slices = [];
+  for (const summary of summaries) {
+    if (summary.equityCents <= 0n) {
+      continue;
+    }
+    totalEquityCents += summary.equityCents;
+    slices.push({
+      label: summary.name,
+      value: Number(summary.equityCents),
+      meta: `${formatCents(summary.equityCents)} | Net ${formatSignedCents(summary.netProfitCents)}`,
+    });
+  }
+
+  renderDoughnutChart({
+    canvas: els.equityDistributionChart,
+    legendEl: els.equityDistributionLegend,
+    slices,
+    emptyLabel: "Add members and deposits to view distribution.",
+    centerLabel: "Total Equity",
+    centerValue: formatCents(totalEquityCents),
+  });
 }
 
 function renderMemberTable() {
