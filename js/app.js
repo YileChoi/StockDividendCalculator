@@ -2,7 +2,6 @@ import {
   CONSTANTS,
   addMember,
   applyDeposit,
-  applyProfitLoss,
   applySetValuation,
   applyWithdrawal,
   createInitialState,
@@ -48,7 +47,6 @@ const els = {
   membersTableBody: document.getElementById("membersTableBody"),
   transactionsTableBody: document.getElementById("transactionsTableBody"),
   changesTableBody: document.getElementById("changesTableBody"),
-  resetData: document.getElementById("resetData"),
   saveNow: document.getElementById("saveNow"),
   exportDb: document.getElementById("exportDb"),
   importDb: document.getElementById("importDb"),
@@ -100,7 +98,6 @@ function bindEvents() {
   els.transactionForm.addEventListener("submit", handleTransactionSubmit);
   els.valuationForm.addEventListener("submit", handleValuationSubmit);
   els.txType.addEventListener("change", updateTxFormFields);
-  els.resetData.addEventListener("click", handleReset);
   els.saveNow.addEventListener("click", handleManualSave);
   els.exportDb.addEventListener("click", handleExport);
   els.importDb.addEventListener("click", handleImportClick);
@@ -152,8 +149,6 @@ async function handleTransactionSubmit(event) {
       state = applyDeposit(state, payload);
     } else if (txType === CONSTANTS.TX_TYPES.WITHDRAWAL) {
       state = applyWithdrawal(state, payload);
-    } else if (txType === CONSTANTS.TX_TYPES.PROFIT_LOSS) {
-      state = applyProfitLoss(state, payload);
     } else {
       throw new Error("Unsupported transaction type.");
     }
@@ -203,20 +198,6 @@ async function handleValuationSubmit(event) {
   } catch (error) {
     setStatus(error.message, true);
   }
-}
-
-async function handleReset() {
-  const confirmed = window.confirm(
-    "Reset all members and transaction history? This cannot be undone.",
-  );
-  if (!confirmed) {
-    return;
-  }
-  state = createInitialState();
-  appendChangeRecord("reset", "Reset the full ledger state.");
-  const saved = await persistState({ manual: true });
-  renderAll();
-  setStatusWithSaveOutcome("All data reset.", saved);
 }
 
 async function handleManualSave() {
@@ -379,16 +360,11 @@ function updateTxFormFields() {
     els.txAmount.min = "0.01";
     els.txHint.textContent =
       "Deposit buys units at current NAV. Late entries cannot claim earlier profit.";
-  } else if (txType === CONSTANTS.TX_TYPES.WITHDRAWAL) {
+  } else {
     els.amountLabel.textContent = "Amount (cash out)";
     els.txAmount.min = "0.01";
     els.txHint.textContent =
-      "Withdrawal redeems units at current NAV based on the selected person's owned units.";
-  } else if (txType === CONSTANTS.TX_TYPES.PROFIT_LOSS) {
-    els.amountLabel.textContent = "Profit/Loss Amount (+/-)";
-    els.txAmount.min = "";
-    els.txHint.textContent =
-      "Use positive for profit and negative for loss. Units stay unchanged; NAV changes.";
+      "Withdrawal redeems units at current NAV based on the selected person's owned units. For market/account value changes, use Manual Total Account Update.";
   }
 }
 

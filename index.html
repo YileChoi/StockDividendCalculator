@@ -90,21 +90,10 @@
             </label>
 
             <label>
-              <span class="fieldTitle">
-                Activity Type
-                <button
-                  type="button"
-                  class="infoTip"
-                  aria-label="Activity type help"
-                  data-tip="Deposit: cash goes into account and buys units. Withdrawal: cash comes out and redeems units. Profit/Loss: market gain/loss update without cash transfer."
-                >
-                  ?
-                </button>
-              </span>
+              Activity Type
               <select id="txType" name="txType">
                 <option value="deposit">Deposit (Cash In)</option>
                 <option value="withdrawal">Withdrawal (Cash Out)</option>
-                <option value="profit_loss">Profit / Loss</option>
               </select>
             </label>
 
@@ -282,9 +271,6 @@
       <section class="panel">
         <div class="panelRow">
           <h2>Transaction History</h2>
-          <button type="button" id="resetData" class="danger">
-            Reset All Data
-          </button>
         </div>
 
         <div class="tableWrap">

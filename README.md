@@ -91,9 +91,7 @@ waitress-serve --listen=0.0.0.0:8080 app:app
 
 1. Add each family member once.
 2. Record each deposit/withdrawal on the actual date.
-3. Record account performance:
-   - `Profit / Loss` for delta changes, or
-   - `Set Portfolio Value` using broker statement total.
+3. Use `Manual Total Account Update` whenever broker total account value changes.
 4. Use Ownership Snapshot as the source of truth for fair ratios.
 
 ## Save Behavior
