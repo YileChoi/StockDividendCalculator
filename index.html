@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stock Equity Dilution Calculator</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="layout">
+      <header class="hero">
+        <h1>Stock Equity Dilution Calculator</h1>
+        <p>
+          Track each family member's fair ownership using a unit/NAV model. Every
+          deposit buys units at the current value, every withdrawal redeems units,
+          and market profit/loss updates each member proportionally.
+        </p>
+        <p class="heroLinks">
+          <a href="/logic">View Full Calculation Logic</a>
+        </p>
+        <div class="saveControls">
+          <button type="button" id="saveNow">Save Now</button>
+          <span id="autosaveState" class="autosaveState">Autosave: ON</span>
+        </div>
+      </header>
+
+      <section class="panel">
+        <h2>Fund Overview</h2>
+        <div class="stats">
+          <article class="stat">
+            <span class="label">Portfolio Value</span>
+            <strong id="statPortfolio">$0.00</strong>
+          </article>
+          <article class="stat">
+            <span class="label">NAV Per Unit</span>
+            <strong id="statNav">$1.0000</strong>
+          </article>
+          <article class="stat">
+            <span class="label">Total Units</span>
+            <strong id="statUnits">0</strong>
+          </article>
+          <article class="stat">
+            <span class="label">People</span>
+            <strong id="statMembers">0</strong>
+          </article>
+        </div>
+      </section>
+
+      <section class="grid">
+        <section class="panel">
+          <h2>Add Person</h2>
+          <form id="memberForm" class="stack">
+            <label>
+              Name
+              <input
+                id="memberName"
+                name="memberName"
+                type="text"
+                placeholder="e.g. Alex"
+                maxlength="60"
+                required
+              />
+            </label>
+            <button type="submit">Add Person</button>
+          </form>
+        </section>
+
+        <section class="panel">
+          <h2>Record Activity</h2>
+          <form id="transactionForm" class="stack">
+            <label>
+              Date
+              <input id="txDate" name="txDate" type="date" required />
+            </label>
+
+            <label>
+              Activity Type
+              <select id="txType" name="txType">
+                <option value="deposit">Deposit (Cash In)</option>
+                <option value="withdrawal">Withdrawal (Cash Out)</option>
+                <option value="profit_loss">Profit / Loss</option>
+                <option value="set_valuation">Set Portfolio Value</option>
+              </select>
+            </label>
+
+            <label id="memberField">
+              Person
+              <select id="txMember" name="txMember" required></select>
+            </label>
+
+            <label id="amountField">
+              <span id="amountLabel">Amount</span>
+              <input
+                id="txAmount"
+                name="txAmount"
+                type="number"
+                inputmode="decimal"
+                step="0.01"
+                min="0"
+                required
+              />
+            </label>
+
+            <label>
+              Note (Optional)
+              <textarea
+                id="txNote"
+                name="txNote"
+                rows="2"
+                maxlength="180"
+                placeholder="Broker transfer, family payout, monthly valuation, ..."
+              ></textarea>
+            </label>
+
+            <button type="submit">Save Activity</button>
+            <p id="txHint" class="hint"></p>
+          </form>
+        </section>
+      </section>
+
+      <section class="panel">
+        <h2>Ownership Snapshot</h2>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Person</th>
+                <th>Units</th>
+                <th>Ownership</th>
+                <th>Current Equity</th>
+                <th>Total In</th>
+                <th>Total Out</th>
+                <th>Net P/L</th>
+              </tr>
+            </thead>
+            <tbody id="membersTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panelRow">
+          <h2>Transaction History</h2>
+          <button type="button" id="resetData" class="danger">
+            Reset All Data
+          </button>
+        </div>
+
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Person</th>
+                <th>Cash Amount</th>
+                <th>Units</th>
+                <th>NAV After</th>
+                <th>Portfolio After</th>
+                <th>Note</th>
+              </tr>
+            </thead>
+            <tbody id="transactionsTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <p id="statusMessage" class="status" aria-live="polite"></p>
+    </main>
+
+    <script type="module" src="./js/app.js"></script>
+  </body>
+</html>

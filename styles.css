@@ -1,0 +1,300 @@
+:root {
+  --bg: #f4f7f5;
+  --panel: #ffffff;
+  --ink: #1a2b23;
+  --muted: #587165;
+  --line: #d4e0d8;
+  --accent: #177245;
+  --danger: #9f1d1d;
+  --shadow: 0 10px 30px rgba(13, 35, 23, 0.08);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at top right, #d8efe3 0%, transparent 30%),
+    linear-gradient(180deg, #eff4f1 0%, var(--bg) 55%);
+  color: var(--ink);
+}
+
+.layout {
+  width: min(1200px, 96%);
+  margin: 1.5rem auto 2rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.hero {
+  background: linear-gradient(135deg, #153d2b, #14604e);
+  color: #f2fffa;
+  border-radius: 14px;
+  padding: 1.2rem 1.4rem;
+  box-shadow: var(--shadow);
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(1.35rem, 2vw, 2rem);
+}
+
+.hero p {
+  margin: 0.65rem 0 0;
+  line-height: 1.45;
+  max-width: 90ch;
+}
+
+.heroLinks {
+  margin-top: 0.8rem;
+}
+
+.heroLinks a {
+  color: #ddffef;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 600;
+}
+
+.heroLinks a:hover {
+  color: #ffffff;
+}
+
+.saveControls {
+  margin-top: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.saveControls button {
+  background: #ffffff;
+  color: #0f4a31;
+  border: 1px solid #bfe2ce;
+  padding: 0.45rem 0.7rem;
+}
+
+.autosaveState {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 999px;
+  padding: 0.36rem 0.65rem;
+  font-size: 0.85rem;
+  color: #edfff4;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1rem;
+  box-shadow: var(--shadow);
+}
+
+.panel h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+}
+
+.panelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 0.75rem;
+}
+
+.stat {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.75rem;
+  background: #fafdfb;
+}
+
+.stat .label {
+  display: block;
+  color: var(--muted);
+  font-size: 0.87rem;
+  margin-bottom: 0.3rem;
+}
+
+.stat strong {
+  font-size: 1.15rem;
+}
+
+.grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.stack {
+  display: grid;
+  gap: 0.75rem;
+}
+
+label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+input,
+select,
+textarea {
+  border: 1px solid #c7d9cd;
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  color: var(--ink);
+  background: #ffffff;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid #6cb68f;
+  border-color: #6cb68f;
+}
+
+button {
+  border: none;
+  border-radius: 9px;
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  color: #ffffff;
+  background: var(--accent);
+  font-weight: 600;
+}
+
+button:hover {
+  filter: brightness(1.05);
+}
+
+button.danger {
+  background: var(--danger);
+}
+
+.hint {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.87rem;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 780px;
+  font-size: 0.93rem;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--line);
+  padding: 0.58rem 0.48rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+th {
+  color: #476558;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 0.9rem;
+}
+
+.status {
+  margin: 0.3rem 0 0;
+  font-size: 0.95rem;
+  min-height: 1.2rem;
+}
+
+.status.ok {
+  color: #1f6f47;
+}
+
+.status.error {
+  color: #8f1d1d;
+}
+
+.doc {
+  display: grid;
+  gap: 1rem;
+}
+
+.doc p {
+  margin: 0.35rem 0;
+  line-height: 1.5;
+  color: #2b4136;
+}
+
+.doc ul {
+  margin: 0.4rem 0 0.5rem 1rem;
+  color: #2b4136;
+}
+
+.doc li {
+  margin: 0.3rem 0;
+}
+
+.formula {
+  background: #f6fbf8;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 0.7rem 0.8rem;
+  font-family: "Menlo", "Consolas", monospace;
+  color: #214233;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 580px) {
+  .stats {
+    grid-template-columns: 1fr;
+  }
+
+  .hero {
+    padding: 1rem;
+  }
+
+  .panel {
+    padding: 0.85rem;
+  }
+}
