@@ -23,5 +23,12 @@ if ! "$VENV_PY" -c "import flask" >/dev/null 2>&1; then
   "$VENV_PIP" install -r requirements.txt
 fi
 
+if command -v lsof >/dev/null 2>&1; then
+  if lsof -n -iTCP:5000 -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "Port 5000 is already in use. Stop the existing process and run ./local.sh again."
+    exit 1
+  fi
+fi
+
 echo "Starting Flask development server at http://127.0.0.1:5000"
 exec "$VENV_FLASK" --app app run --debug --host=127.0.0.1 --port=5000

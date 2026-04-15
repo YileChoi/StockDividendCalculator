@@ -39,6 +39,8 @@ That means:
 ```
 StockDividendCalculator/
 ├── app.py
+├── data/
+│ └── ledger.json   (auto-created local DB file)
 ├── local.sh
 ├── index.html
 ├── logic.html
@@ -94,10 +96,20 @@ waitress-serve --listen=0.0.0.0:8080 app:app
 
 ## Save Behavior
 
-- Autosave is enabled and visible in the top header (`Autosave: ON`).
-- Every successful add/update transaction is saved automatically to local browser storage.
-- A visible `Save Now` button is available for manual save confirmation.
-- Closing the tab accidentally will not lose recorded data on the same browser/device.
+- Data is stored in `data/ledger.json` on the machine running Flask.
+- `ledger.json` is plain, human-readable JSON.
+- Every successful add/update transaction autosaves to that JSON file.
+- `Save Now` forces an immediate write to `data/ledger.json`.
+- `Export DB` downloads `ledger.json` for transfer/backup.
+- `Import DB` loads a `ledger.json` file into the current machine.
+- Closing browser/server does not erase data; it reloads from `data/ledger.json` on next start.
+
+## Transfer To Another Machine
+
+1. On old machine, click `Export DB` (or copy `data/ledger.json` directly).
+2. Move that file to new machine.
+3. Start server on new machine with `./local.sh`.
+4. Click `Import DB` and choose the transferred JSON file.
 
 ## Important Operational Discipline
 

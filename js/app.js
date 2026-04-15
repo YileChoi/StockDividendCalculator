@@ -12,7 +12,12 @@ import {
   serializeState,
 } from "./model.js";
 
-const STORAGE_KEY = "stock-equity-dilution-calculator-v1";
+const API = {
+  ledger: "/api/ledger",
+  import: "/api/ledger/import",
+  export: "/api/ledger/export",
+};
+
 const TX_LABELS = {
   [CONSTANTS.TX_TYPES.DEPOSIT]: "Deposit",
   [CONSTANTS.TX_TYPES.WITHDRAWAL]: "Withdrawal",
@@ -36,6 +41,9 @@ const els = {
   transactionsTableBody: document.getElementById("transactionsTableBody"),
   resetData: document.getElementById("resetData"),
   saveNow: document.getElementById("saveNow"),
+  exportDb: document.getElementById("exportDb"),
+  importDb: document.getElementById("importDb"),
+  importFile: document.getElementById("importFile"),
   autosaveState: document.getElementById("autosaveState"),
   statusMessage: document.getElementById("statusMessage"),
   statPortfolio: document.getElementById("statPortfolio"),
@@ -44,11 +52,16 @@ const els = {
   statMembers: document.getElementById("statMembers"),
 };
 
-let state = loadState();
+let state = createInitialState();
 bindEvents();
 setDefaultDate();
-renderAll();
-updateAutosaveState("Autosave: ON");
+updateAutosaveState("File DB: disconnected");
+void init();
+
+async function init() {
+  state = await loadStateFromServer();
+  renderAll();
+}
 
 function bindEvents() {
   els.memberForm.addEventListener("submit", handleMemberSubmit);
@@ -56,9 +69,9 @@ function bindEvents() {
   els.txType.addEventListener("change", updateTxFormFields);
   els.resetData.addEventListener("click", handleReset);
   els.saveNow.addEventListener("click", handleManualSave);
-  window.addEventListener("beforeunload", () => {
-    persistState({ manual: false });
-  });
+  els.exportDb.addEventListener("click", handleExport);
+  els.importDb.addEventListener("click", handleImportClick);
+  els.importFile.addEventListener("change", handleImportFile);
 }
 
 function setDefaultDate() {
@@ -67,12 +80,12 @@ function setDefaultDate() {
   }
 }
 
-function handleMemberSubmit(event) {
+async function handleMemberSubmit(event) {
   event.preventDefault();
 
   try {
     state = addMember(state, els.memberName.value, todayISO());
-    const saved = persistState({ manual: false });
+    const saved = await persistState({ manual: false });
     els.memberName.value = "";
     renderAll();
     setStatusWithSaveOutcome("Person added.", saved);
@@ -81,7 +94,7 @@ function handleMemberSubmit(event) {
   }
 }
 
-function handleTransactionSubmit(event) {
+async function handleTransactionSubmit(event) {
   event.preventDefault();
 
   const txType = els.txType.value;
@@ -105,7 +118,7 @@ function handleTransactionSubmit(event) {
       throw new Error("Unsupported transaction type.");
     }
 
-    const saved = persistState({ manual: false });
+    const saved = await persistState({ manual: false });
     els.txAmount.value = "";
     els.txNote.value = "";
     renderAll();
@@ -115,7 +128,7 @@ function handleTransactionSubmit(event) {
   }
 }
 
-function handleReset() {
+async function handleReset() {
   const confirmed = window.confirm(
     "Reset all members and transaction history? This cannot be undone.",
   );
@@ -123,17 +136,60 @@ function handleReset() {
     return;
   }
   state = createInitialState();
-  const saved = persistState({ manual: true });
+  const saved = await persistState({ manual: true });
   renderAll();
   setStatusWithSaveOutcome("All data reset.", saved);
 }
 
-function handleManualSave() {
-  if (persistState({ manual: true })) {
-    setStatus("Saved to local record.");
+async function handleManualSave() {
+  const saved = await persistState({ manual: true });
+  if (saved) {
+    setStatus("Saved to data/ledger.json.");
   } else {
-    setStatus("Failed to save. Check browser storage settings.", true);
+    setStatus("Failed to save. Is the Flask server running?", true);
   }
+}
+
+function handleExport() {
+  setStatus("Downloading ledger.json...");
+  window.location.href = API.export;
+}
+
+function handleImportClick() {
+  els.importFile.value = "";
+  els.importFile.click();
+}
+
+async function handleImportFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  let parsed;
+  try {
+    const text = await file.text();
+    parsed = JSON.parse(text);
+  } catch {
+    setStatus("Selected file is not valid JSON.", true);
+    return;
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    setStatus("Imported JSON must be an object.", true);
+    return;
+  }
+
+  const importedState = deserializeState(JSON.stringify(parsed));
+  const saved = await writeImportedState(importedState);
+  if (!saved) {
+    setStatus("Import failed while writing server DB file.", true);
+    return;
+  }
+
+  state = importedState;
+  renderAll();
+  setStatus(`Imported ${file.name} into data/ledger.json.`);
 }
 
 function renderAll() {
@@ -153,7 +209,10 @@ function renderOverview() {
 
 function renderMemberOptions() {
   const options = state.members
-    .map((member) => `<option value="${member.id}">${escapeHtml(member.name)}</option>`)
+    .map(
+      (member) =>
+        `<option value="${member.id}">${escapeHtml(member.name)}</option>`,
+    )
     .join("");
 
   els.txMember.innerHTML = options;
@@ -256,20 +315,68 @@ function renderTransactionsTable() {
     .join("");
 }
 
-function loadState() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  return deserializeState(raw);
+async function loadStateFromServer() {
+  try {
+    const response = await fetch(API.ledger, { method: "GET" });
+    if (!response.ok) {
+      throw new Error(`Load failed (${response.status}).`);
+    }
+    const payload = await response.json();
+    const loadedState = deserializeState(JSON.stringify(payload));
+    updateAutosaveState("File DB: data/ledger.json | connected");
+    setStatus("Loaded from data/ledger.json.");
+    return loadedState;
+  } catch (error) {
+    updateAutosaveState("File DB: offline");
+    setStatus(
+      `Could not load file DB from server. Using empty in-memory state. ${error.message}`,
+      true,
+    );
+    return createInitialState();
+  }
 }
 
-function persistState({ manual }) {
+async function persistState({ manual }) {
   try {
-    localStorage.setItem(STORAGE_KEY, serializeState(state));
-    const stamp = formatTime(new Date());
+    const response = await fetch(API.ledger, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: serializeState(state),
+    });
+    if (!response.ok) {
+      throw new Error(`Save failed (${response.status}).`);
+    }
+    const payload = await response.json();
+    const stamp = formatIsoToLocalTime(payload.updatedAt);
     const mode = manual ? "Saved" : "Autosaved";
-    updateAutosaveState(`Autosave: ON | ${mode} at ${stamp}`);
+    updateAutosaveState(
+      `File DB: ${payload.path ?? "data/ledger.json"} | ${mode} at ${stamp}`,
+    );
     return true;
   } catch {
-    updateAutosaveState("Autosave: OFF (storage unavailable)");
+    updateAutosaveState("File DB: save failed");
+    return false;
+  }
+}
+
+async function writeImportedState(importedState) {
+  try {
+    const response = await fetch(API.import, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: serializeState(importedState),
+    });
+    if (!response.ok) {
+      throw new Error(`Import failed (${response.status}).`);
+    }
+    const payload = await response.json();
+    const stamp = formatIsoToLocalTime(payload.updatedAt);
+    updateAutosaveState(
+      `File DB: ${payload.path ?? "data/ledger.json"} | Imported at ${stamp}`,
+    );
+    return true;
+  } catch {
+    updateAutosaveState("File DB: import failed");
     return false;
   }
 }
@@ -285,10 +392,7 @@ function setStatusWithSaveOutcome(baseMessage, saved) {
     setStatus(baseMessage);
     return;
   }
-  setStatus(
-    `${baseMessage} Warning: browser storage is unavailable, so this is not persisted.`,
-    true,
-  );
+  setStatus(`${baseMessage} Warning: server file DB save failed.`, true);
 }
 
 function updateAutosaveState(message) {
@@ -362,6 +466,17 @@ function formatNavFromSnapshot(tx) {
     minimumFractionDigits: 4,
     maximumFractionDigits: 6,
   });
+}
+
+function formatIsoToLocalTime(value) {
+  if (!value) {
+    return formatTime(new Date());
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return formatTime(new Date());
+  }
+  return formatTime(date);
 }
 
 function escapeHtml(value) {
