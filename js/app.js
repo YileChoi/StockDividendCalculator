@@ -11,6 +11,7 @@ import {
   serializeState,
 } from "./model.js";
 import { renderDoughnutChart } from "./doughnut.js";
+import { initFamilyDashboard } from "./familyDashboard.js";
 
 const API = {
   ledger: "/api/ledger",
@@ -76,6 +77,7 @@ let activeView = "calculator";
 
 bindEvents();
 initNavigation();
+initFamilyDashboard();
 setDefaultDate();
 updateAutosaveState("File DB: connecting...");
 void init();
