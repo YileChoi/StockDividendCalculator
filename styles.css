@@ -473,8 +473,16 @@ button.revertBtn {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.familyMemberDetailGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .accountDetailStats {
   grid-template-columns: repeat(3, minmax(140px, 1fr));
+}
+
+.memberDetailStats {
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
 }
 
 .familyTrendCanvas {
@@ -511,6 +519,29 @@ button.revertBtn {
 .memberCard .meta {
   color: #547063;
   font-size: 0.86rem;
+}
+
+.memberCardButton {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #d9e7df;
+  border-radius: 11px;
+  padding: 0.75rem;
+  background: #fbfefc;
+  color: inherit;
+  display: grid;
+  gap: 0.32rem;
+}
+
+.memberCardButton:hover {
+  filter: none;
+  background: #f4fbf7;
+  border-color: #b9d7c7;
+}
+
+.memberCardButton:focus-visible {
+  outline: 2px solid #6cb68f;
+  outline-offset: 2px;
 }
 
 .valuePositive {
@@ -650,6 +681,10 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .familyMemberDetailGrid {
+    grid-template-columns: 1fr;
+  }
+
   .memberCards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -659,6 +694,10 @@ th {
   }
 
   .accountDetailStats {
+    grid-template-columns: 1fr;
+  }
+
+  .memberDetailStats {
     grid-template-columns: 1fr;
   }
 

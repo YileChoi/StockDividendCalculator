@@ -491,6 +491,21 @@
             </div>
           </section>
 
+          <section class="panel">
+            <h2>Family Allocation</h2>
+            <div class="chartBlock">
+              <canvas
+                id="familyAllocationChart"
+                class="chartCanvas doughnutCanvas"
+                width="420"
+                height="420"
+                aria-label="Family allocation doughnut chart"
+                role="img"
+              ></canvas>
+              <ul id="familyAllocationLegend" class="chartLegend"></ul>
+            </div>
+          </section>
+
           <section class="grid familyOpsGrid">
             <section class="panel">
               <h2>Add Family Member Account</h2>
@@ -567,6 +582,9 @@
 
             <section class="panel">
               <h2>Member Profit/Loss Summary</h2>
+              <p class="hint">
+                Click a member card to open member details and manage accounts.
+              </p>
               <div id="familyMemberCards" class="memberCards"></div>
             </section>
           </section>
@@ -586,11 +604,93 @@
                     <th>Invested</th>
                     <th>Net P/L</th>
                     <th>Last Updated</th>
+                  </tr>
+                </thead>
+                <tbody id="familyAccountsTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section id="familyMemberDetailPage" class="appView" hidden>
+          <section class="panel">
+            <div class="panelRow">
+              <h2 id="familyMemberDetailTitle">Member Details</h2>
+              <div class="inlineActions">
+                <button id="familyBackFromMember" type="button" class="ghostBtn">
+                  Back To Dashboard
+                </button>
+              </div>
+            </div>
+            <div class="stats memberDetailStats">
+              <article class="stat">
+                <span class="label">Total Current Value</span>
+                <strong id="familyMemberStatTotalValue">$0.00</strong>
+              </article>
+              <article class="stat">
+                <span class="label">Total Invested Amount</span>
+                <strong id="familyMemberStatInvested">$0.00</strong>
+              </article>
+              <article class="stat">
+                <span class="label">Total Net P/L</span>
+                <strong id="familyMemberStatNet">$0.00</strong>
+              </article>
+              <article class="stat">
+                <span class="label">Tracked Accounts</span>
+                <strong id="familyMemberStatAccountCount">0</strong>
+              </article>
+            </div>
+          </section>
+
+          <section class="grid familyMemberDetailGrid">
+            <section class="panel">
+              <h2>Account Allocation</h2>
+              <div class="chartBlock">
+                <canvas
+                  id="familyMemberAllocationChart"
+                  class="chartCanvas doughnutCanvas"
+                  width="420"
+                  height="420"
+                  aria-label="Member account allocation doughnut chart"
+                  role="img"
+                ></canvas>
+                <ul id="familyMemberAllocationLegend" class="chartLegend"></ul>
+              </div>
+            </section>
+
+            <section class="panel">
+              <h2>Combined Trend (All Accounts)</h2>
+              <canvas
+                id="familyMemberTrendChart"
+                class="chartCanvas lineChartCanvas familyTrendCanvas"
+                width="760"
+                height="280"
+                aria-label="Member combined account trend chart"
+                role="img"
+              ></canvas>
+              <p id="familyMemberTrendMeta" class="hint"></p>
+            </section>
+          </section>
+
+          <section class="panel">
+            <h2>Member Accounts</h2>
+            <div class="tableWrap">
+              <table>
+                <caption class="srOnly">
+                  Accounts under selected member with links to account-level details and actions.
+                </caption>
+                <thead>
+                  <tr>
+                    <th>Account</th>
+                    <th>Current Value</th>
+                    <th>Invested</th>
+                    <th>Net P/L</th>
+                    <th>Last Updated</th>
                     <th>Details</th>
                     <th>Remove</th>
                   </tr>
                 </thead>
-                <tbody id="familyAccountsTableBody"></tbody>
+                <tbody id="familyMemberAccountsTableBody"></tbody>
               </table>
             </div>
           </section>
@@ -602,7 +702,7 @@
               <h2 id="familyAccountDetailTitle">Account Details</h2>
               <div class="inlineActions">
                 <button id="familyBackToDashboard" type="button" class="ghostBtn">
-                  Back To Dashboard
+                  Back
                 </button>
               </div>
             </div>

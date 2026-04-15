@@ -1,3 +1,4 @@
+import { renderDoughnutChart } from "./doughnut.js";
 import { renderLineChart } from "./lineChart.js";
 
 const API = {
@@ -28,6 +29,7 @@ export function initFamilyDashboard() {
     els,
     db: createInitialDb(),
     activePage: "dashboard",
+    activeMemberName: null,
     activeAccountId: null,
   };
 
@@ -77,6 +79,7 @@ function collectElements() {
     familyDbState: document.getElementById("familyDbState"),
 
     familyDashboardPage: document.getElementById("familyDashboardPage"),
+    familyMemberDetailPage: document.getElementById("familyMemberDetailPage"),
     familyAccountDetailPage: document.getElementById("familyAccountDetailPage"),
 
     familySelectedTitle: document.getElementById("familySelectedTitle"),
@@ -84,6 +87,9 @@ function collectElements() {
     familyStatTotalInvested: document.getElementById("familyStatTotalInvested"),
     familyStatNet: document.getElementById("familyStatNet"),
     familyStatAccountCount: document.getElementById("familyStatAccountCount"),
+
+    familyAllocationChart: document.getElementById("familyAllocationChart"),
+    familyAllocationLegend: document.getElementById("familyAllocationLegend"),
 
     familyAccountForm: document.getElementById("familyAccountForm"),
     familyMemberName: document.getElementById("familyMemberName"),
@@ -96,10 +102,32 @@ function collectElements() {
     familyMemberCards: document.getElementById("familyMemberCards"),
     familyAccountsTableBody: document.getElementById("familyAccountsTableBody"),
 
+    familyBackFromMember: document.getElementById("familyBackFromMember"),
+    familyMemberDetailTitle: document.getElementById("familyMemberDetailTitle"),
+    familyMemberStatTotalValue: document.getElementById("familyMemberStatTotalValue"),
+    familyMemberStatInvested: document.getElementById("familyMemberStatInvested"),
+    familyMemberStatNet: document.getElementById("familyMemberStatNet"),
+    familyMemberStatAccountCount: document.getElementById(
+      "familyMemberStatAccountCount",
+    ),
+    familyMemberAllocationChart: document.getElementById(
+      "familyMemberAllocationChart",
+    ),
+    familyMemberAllocationLegend: document.getElementById(
+      "familyMemberAllocationLegend",
+    ),
+    familyMemberTrendChart: document.getElementById("familyMemberTrendChart"),
+    familyMemberTrendMeta: document.getElementById("familyMemberTrendMeta"),
+    familyMemberAccountsTableBody: document.getElementById(
+      "familyMemberAccountsTableBody",
+    ),
+
     familyBackToDashboard: document.getElementById("familyBackToDashboard"),
     familyAccountDetailTitle: document.getElementById("familyAccountDetailTitle"),
     familyAccountCurrentValue: document.getElementById("familyAccountCurrentValue"),
-    familyAccountInvestedValue: document.getElementById("familyAccountInvestedValue"),
+    familyAccountInvestedValue: document.getElementById(
+      "familyAccountInvestedValue",
+    ),
     familyAccountNetValue: document.getElementById("familyAccountNetValue"),
 
     familyChangeForm: document.getElementById("familyChangeForm"),
@@ -138,12 +166,26 @@ function bindEvents(ctx) {
   els.familyAccountForm.addEventListener("submit", (event) =>
     handleAddAccount(ctx, event),
   );
-  els.familyAccountsTableBody.addEventListener("click", (event) =>
-    handleAccountsTableClick(ctx, event),
+  els.familyMemberCards.addEventListener("click", (event) =>
+    handleMemberCardsClick(ctx, event),
+  );
+
+  els.familyBackFromMember.addEventListener("click", () => {
+    openDashboardPage(ctx, { updateHash: true });
+    renderAll(ctx);
+  });
+
+  els.familyMemberAccountsTableBody.addEventListener("click", (event) =>
+    handleMemberAccountsTableClick(ctx, event),
   );
 
   els.familyBackToDashboard.addEventListener("click", () => {
-    openDashboardPage(ctx, { updateHash: true });
+    const family = getPrimaryFamily(ctx.db);
+    if (family && ctx.activeMemberName && memberHasAccounts(family, ctx.activeMemberName)) {
+      openMemberDetailPage(ctx, ctx.activeMemberName, { updateHash: true });
+    } else {
+      openDashboardPage(ctx, { updateHash: true });
+    }
     renderAll(ctx);
   });
 
@@ -204,6 +246,7 @@ async function handleSaveFamilyProfile(ctx, event) {
     if (!name) {
       throw new Error("Family name is required.");
     }
+
     family.name = name;
     family.updatedAt = new Date().toISOString();
 
@@ -223,7 +266,7 @@ async function handleAddAccount(ctx, event) {
   event.preventDefault();
   const family = getPrimaryFamily(ctx.db);
   if (!family) {
-    setFamilyStatus(ctx.els, "Family profile is unavailable.", true);
+    setHubStatus(ctx.els, "Family profile is unavailable.", true);
     return;
   }
 
@@ -297,15 +340,42 @@ async function handleAddAccount(ctx, event) {
     ctx.els.familyAccountForm.reset();
     ctx.els.familyAccountDate.value = todayISO();
     renderAll(ctx);
-    setFamilyStatus(ctx.els, "Account added.");
+    setHubStatus(ctx.els, "Account added.");
   } catch (error) {
-    setFamilyStatus(ctx.els, error.message, true);
+    setHubStatus(ctx.els, error.message, true);
   }
 }
 
-async function handleAccountsTableClick(ctx, event) {
+function handleMemberCardsClick(ctx, event) {
   const family = getPrimaryFamily(ctx.db);
   if (!family) {
+    return;
+  }
+
+  const trigger = event.target.closest("button[data-member-open]");
+  if (!trigger) {
+    return;
+  }
+
+  const encodedName = trigger.dataset.memberOpen || "";
+  let memberName = "";
+  try {
+    memberName = decodeURIComponent(encodedName);
+  } catch {
+    memberName = "";
+  }
+
+  if (!memberName || !memberHasAccounts(family, memberName)) {
+    return;
+  }
+
+  openMemberDetailPage(ctx, memberName, { updateHash: true });
+  renderAll(ctx);
+}
+
+async function handleMemberAccountsTableClick(ctx, event) {
+  const family = getPrimaryFamily(ctx.db);
+  if (!family || !ctx.activeMemberName) {
     return;
   }
 
@@ -327,46 +397,7 @@ async function handleAccountsTableClick(ctx, event) {
   }
 
   const accountId = toPositiveInt(removeBtn.dataset.accountRemove, null);
-  const account = findAccountById(family, accountId);
-  if (!account) {
-    return;
-  }
-
-  const confirmed = window.confirm(
-    `Remove account "${account.accountName}" for ${account.memberName}?`,
-  );
-  if (!confirmed) {
-    return;
-  }
-
-  appendFamilyEvent(family, {
-    date: todayISO(),
-    type: "account_removed",
-    memberName: account.memberName,
-    accountId: account.id,
-    accountName: account.accountName,
-    currentDeltaCents: -account.currentCents,
-    investedDeltaCents: -account.investedCents,
-    currentAfterCents: 0,
-    investedAfterCents: 0,
-    note: "Account removed.",
-  });
-
-  family.accounts = family.accounts.filter((item) => item.id !== account.id);
-  family.updatedAt = new Date().toISOString();
-
-  if (ctx.activeAccountId === account.id) {
-    openDashboardPage(ctx, { updateHash: true });
-  }
-
-  const saved = await persistDb(ctx, { endpoint: API.db });
-  if (!saved) {
-    setFamilyStatus(ctx.els, "Could not save after removing account.", true);
-    return;
-  }
-
-  renderAll(ctx);
-  setFamilyStatus(ctx.els, "Account removed.");
+  await removeAccount(ctx, accountId);
 }
 
 async function handleRecordChange(ctx, event) {
@@ -471,11 +502,8 @@ async function handleImportFamilyDb(ctx, event) {
       throw new Error("Could not write imported file to family DB.");
     }
 
-    const activeAccount = getActiveAccount(ctx);
-    if (!activeAccount) {
-      openDashboardPage(ctx, { updateHash: isFamilyRoute() });
-    }
-
+    syncPageFromHash(ctx);
+    normalizeActivePageAfterDataChange(ctx, { updateHash: false });
     renderAll(ctx);
     setHubStatus(ctx.els, `Imported ${file.name}.`);
   } catch (error) {
@@ -526,27 +554,93 @@ function syncPageFromHash(ctx) {
 
   const accountId = parseAccountIdFromHash(window.location.hash);
   const account = findAccountById(family, accountId);
-
   if (account) {
     openAccountDetailPage(ctx, account.id, { updateHash: false });
-  } else {
-    openDashboardPage(ctx, { updateHash: false });
+    return;
   }
+
+  const memberName = parseMemberNameFromHash(window.location.hash);
+  if (memberName && memberHasAccounts(family, memberName)) {
+    openMemberDetailPage(ctx, memberName, { updateHash: false });
+    return;
+  }
+
+  openDashboardPage(ctx, { updateHash: false });
 }
 
 function openDashboardPage(ctx, { updateHash }) {
   ctx.activePage = "dashboard";
+  ctx.activeMemberName = null;
   ctx.activeAccountId = null;
   if (updateHash) {
     setDashboardHash();
   }
 }
 
+function openMemberDetailPage(ctx, memberName, { updateHash }) {
+  ctx.activePage = "member";
+  ctx.activeMemberName = memberName;
+  ctx.activeAccountId = null;
+  if (updateHash) {
+    setMemberHash(memberName);
+  }
+}
+
 function openAccountDetailPage(ctx, accountId, { updateHash }) {
+  const family = getPrimaryFamily(ctx.db);
+  const account = findAccountById(family, accountId);
+
   ctx.activePage = "account";
   ctx.activeAccountId = accountId;
+  if (account) {
+    ctx.activeMemberName = account.memberName;
+  }
+
   if (updateHash) {
     setAccountHash(accountId);
+  }
+}
+
+function normalizeActivePageAfterDataChange(ctx, { updateHash }) {
+  const family = getPrimaryFamily(ctx.db);
+  if (!family) {
+    openDashboardPage(ctx, { updateHash });
+    return;
+  }
+
+  if (ctx.activePage === "account") {
+    const activeAccount = getActiveAccount(ctx);
+    if (activeAccount) {
+      ctx.activeMemberName = activeAccount.memberName;
+      if (updateHash) {
+        setAccountHash(activeAccount.id);
+      }
+      return;
+    }
+
+    if (ctx.activeMemberName && memberHasAccounts(family, ctx.activeMemberName)) {
+      openMemberDetailPage(ctx, ctx.activeMemberName, { updateHash });
+      return;
+    }
+
+    openDashboardPage(ctx, { updateHash });
+    return;
+  }
+
+  if (ctx.activePage === "member") {
+    if (ctx.activeMemberName && memberHasAccounts(family, ctx.activeMemberName)) {
+      if (updateHash) {
+        setMemberHash(ctx.activeMemberName);
+      }
+      return;
+    }
+
+    openDashboardPage(ctx, { updateHash });
+    return;
+  }
+
+  if (updateHash) {
+    setDashboardHash();
   }
 }
 
@@ -556,18 +650,28 @@ function renderAll(ctx) {
     return;
   }
 
+  normalizeActivePageAfterDataChange(ctx, { updateHash: false });
+
   ctx.els.familyNameInput.value = family.name;
 
   renderFamilySummary(ctx, family);
+  renderFamilyAllocationChart(ctx, family);
   renderMemberCards(ctx, family);
   renderAccountsTable(ctx, family);
 
-  const activeAccount = getActiveAccount(ctx);
-  const showAccountDetail = ctx.activePage === "account" && Boolean(activeAccount);
+  const showDashboard = ctx.activePage === "dashboard";
+  const showMemberDetail = ctx.activePage === "member";
+  const showAccountDetail = ctx.activePage === "account";
 
-  ctx.els.familyDashboardPage.hidden = showAccountDetail;
+  ctx.els.familyDashboardPage.hidden = !showDashboard;
+  ctx.els.familyMemberDetailPage.hidden = !showMemberDetail;
   ctx.els.familyAccountDetailPage.hidden = !showAccountDetail;
 
+  if (showMemberDetail && ctx.activeMemberName) {
+    renderMemberDetail(ctx, family, ctx.activeMemberName);
+  }
+
+  const activeAccount = getActiveAccount(ctx);
   if (showAccountDetail && activeAccount) {
     renderAccountDetail(ctx, family, activeAccount);
   }
@@ -582,6 +686,27 @@ function renderFamilySummary(ctx, family) {
   ctx.els.familyStatAccountCount.textContent = String(stats.accountCount);
   ctx.els.familyStatNet.classList.toggle("valuePositive", stats.totalNetCents > 0);
   ctx.els.familyStatNet.classList.toggle("valueNegative", stats.totalNetCents < 0);
+}
+
+function renderFamilyAllocationChart(ctx, family) {
+  const stats = getFamilyStats(family);
+  const memberSummaries = getMemberSummaries(family.accounts);
+  const slices = memberSummaries
+    .filter((member) => member.currentCents > 0)
+    .map((member) => ({
+      label: member.memberName,
+      value: member.currentCents,
+      meta: `${formatCents(member.currentCents)} | Net ${formatSignedCents(member.netCents)}`,
+    }));
+
+  renderDoughnutChart({
+    canvas: ctx.els.familyAllocationChart,
+    legendEl: ctx.els.familyAllocationLegend,
+    slices,
+    emptyLabel: "Add accounts to build family allocation.",
+    centerLabel: "Family Total",
+    centerValue: formatCents(stats.totalValueCents),
+  });
 }
 
 function renderMemberCards(ctx, family) {
@@ -600,13 +725,15 @@ function renderMemberCards(ctx, family) {
           : member.netCents < 0
             ? "valueNegative"
             : "";
-      return `<article class="memberCard">
+      const encodedMember = encodeURIComponent(member.memberName);
+
+      return `<button type="button" class="memberCardButton" data-member-open="${encodedMember}">
         <h3>${escapeHtml(member.memberName)}</h3>
         <div class="meta">${member.accountCount} account${member.accountCount === 1 ? "" : "s"}</div>
         <div>Current Value: <strong>${formatCents(member.currentCents)}</strong></div>
         <div>Invested: <strong>${formatCents(member.investedCents)}</strong></div>
         <div>Net P/L: <strong class="${netClass}">${formatSignedCents(member.netCents)}</strong></div>
-      </article>`;
+      </button>`;
     })
     .join("");
 }
@@ -622,7 +749,7 @@ function renderAccountsTable(ctx, family) {
 
   if (!accounts.length) {
     ctx.els.familyAccountsTableBody.innerHTML =
-      '<tr><td colspan="8" class="empty">No accounts recorded yet.</td></tr>';
+      '<tr><td colspan="6" class="empty">No accounts recorded yet.</td></tr>';
     return;
   }
 
@@ -633,6 +760,81 @@ function renderAccountsTable(ctx, family) {
         netCents > 0 ? "valuePositive" : netCents < 0 ? "valueNegative" : "";
       return `<tr>
         <td>${escapeHtml(account.memberName)}</td>
+        <td>${escapeHtml(account.accountName)}</td>
+        <td>${formatCents(account.currentCents)}</td>
+        <td>${formatCents(account.investedCents)}</td>
+        <td><strong class="${netClass}">${formatSignedCents(netCents)}</strong></td>
+        <td>${formatDateTime(account.updatedAt)}</td>
+      </tr>`;
+    })
+    .join("");
+}
+
+function renderMemberDetail(ctx, family, memberName) {
+  const accounts = getMemberAccounts(family, memberName);
+  const summary = getMemberSummary(accounts);
+
+  ctx.els.familyMemberDetailTitle.textContent = `${memberName} | Member Details`;
+  ctx.els.familyMemberStatTotalValue.textContent = formatCents(summary.currentCents);
+  ctx.els.familyMemberStatInvested.textContent = formatCents(summary.investedCents);
+  ctx.els.familyMemberStatNet.textContent = formatSignedCents(summary.netCents);
+  ctx.els.familyMemberStatAccountCount.textContent = String(summary.accountCount);
+  ctx.els.familyMemberStatNet.classList.toggle("valuePositive", summary.netCents > 0);
+  ctx.els.familyMemberStatNet.classList.toggle("valueNegative", summary.netCents < 0);
+
+  renderMemberAllocationChart(ctx, accounts, memberName, summary.currentCents);
+  renderMemberTrendChart(ctx, family, memberName, summary.accountCount);
+  renderMemberAccountsTable(ctx, accounts);
+}
+
+function renderMemberAllocationChart(ctx, accounts, memberName, totalCurrentCents) {
+  const slices = accounts
+    .filter((account) => account.currentCents > 0)
+    .map((account) => ({
+      label: account.accountName,
+      value: account.currentCents,
+      meta: `${formatCents(account.currentCents)} | Net ${formatSignedCents(account.currentCents - account.investedCents)}`,
+    }));
+
+  renderDoughnutChart({
+    canvas: ctx.els.familyMemberAllocationChart,
+    legendEl: ctx.els.familyMemberAllocationLegend,
+    slices,
+    emptyLabel: `Add accounts for ${memberName} to build allocation.`,
+    centerLabel: "Member Total",
+    centerValue: formatCents(totalCurrentCents),
+  });
+}
+
+function renderMemberTrendChart(ctx, family, memberName, accountCount) {
+  const points = buildMemberSeries(family, memberName);
+
+  renderLineChart({
+    canvas: ctx.els.familyMemberTrendChart,
+    points,
+    emptyLabel: "Record account activity to plot combined trend.",
+    yFormatter: (value) => formatCompactCents(value),
+    lineColor: "#2f6f95",
+  });
+
+  ctx.els.familyMemberTrendMeta.textContent =
+    `Combined current value trend across ${accountCount} account${accountCount === 1 ? "" : "s"}.`;
+}
+
+function renderMemberAccountsTable(ctx, accounts) {
+  if (!accounts.length) {
+    ctx.els.familyMemberAccountsTableBody.innerHTML =
+      '<tr><td colspan="7" class="empty">No accounts for this member.</td></tr>';
+    return;
+  }
+
+  ctx.els.familyMemberAccountsTableBody.innerHTML = accounts
+    .map((account) => {
+      const netCents = account.currentCents - account.investedCents;
+      const netClass =
+        netCents > 0 ? "valuePositive" : netCents < 0 ? "valueNegative" : "";
+
+      return `<tr>
         <td>${escapeHtml(account.accountName)}</td>
         <td>${formatCents(account.currentCents)}</td>
         <td>${formatCents(account.investedCents)}</td>
@@ -654,6 +856,12 @@ function renderAccountDetail(ctx, family, account) {
   ctx.els.familyAccountNetValue.textContent = formatSignedCents(netCents);
   ctx.els.familyAccountNetValue.classList.toggle("valuePositive", netCents > 0);
   ctx.els.familyAccountNetValue.classList.toggle("valueNegative", netCents < 0);
+
+  const canGoMemberBack =
+    ctx.activeMemberName && memberHasAccounts(family, ctx.activeMemberName);
+  ctx.els.familyBackToDashboard.textContent = canGoMemberBack
+    ? "Back To Member"
+    : "Back To Dashboard";
 
   renderAccountEventsTable(ctx, family, account.id);
   renderTrendChart(ctx, family, account.id);
@@ -682,7 +890,7 @@ function renderAccountEventsTable(ctx, family, accountId) {
         <td>${escapeHtml(cashFlow)}</td>
         <td>${formatCents(event.currentAfterCents)}</td>
         <td>${formatCents(event.investedAfterCents)}</td>
-        <td>${escapeHtml(event.note || "—")}</td>
+        <td>${escapeHtml(event.note || "-")}</td>
       </tr>`;
     })
     .join("");
@@ -718,11 +926,82 @@ function buildAccountSeries(family, accountId) {
     }));
 }
 
+function buildMemberSeries(family, memberName) {
+  const memberEvents = [...family.events]
+    .filter((event) => event.memberName === memberName)
+    .sort(compareEventsAsc);
+
+  if (!memberEvents.length) {
+    return [];
+  }
+
+  const accountCurrentValues = new Map();
+  const points = [];
+
+  for (const event of memberEvents) {
+    accountCurrentValues.set(event.accountId, event.currentAfterCents);
+
+    let total = 0;
+    for (const value of accountCurrentValues.values()) {
+      total += value;
+    }
+
+    points.push({
+      label: shortDateLabel(event.date),
+      value: total,
+    });
+  }
+
+  return points;
+}
+
 function formatEventCashFlow(event) {
   if (event.type === "set_value" || event.investedDeltaCents === 0) {
-    return "—";
+    return "-";
   }
   return formatSignedCents(event.investedDeltaCents);
+}
+
+async function removeAccount(ctx, accountId) {
+  const family = getPrimaryFamily(ctx.db);
+  const account = findAccountById(family, accountId);
+  if (!family || !account) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Remove account "${account.accountName}" for ${account.memberName}?`,
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  appendFamilyEvent(family, {
+    date: todayISO(),
+    type: "account_removed",
+    memberName: account.memberName,
+    accountId: account.id,
+    accountName: account.accountName,
+    currentDeltaCents: -account.currentCents,
+    investedDeltaCents: -account.investedCents,
+    currentAfterCents: 0,
+    investedAfterCents: 0,
+    note: "Account removed.",
+  });
+
+  family.accounts = family.accounts.filter((item) => item.id !== account.id);
+  family.updatedAt = new Date().toISOString();
+
+  normalizeActivePageAfterDataChange(ctx, { updateHash: true });
+
+  const saved = await persistDb(ctx, { endpoint: API.db });
+  if (!saved) {
+    setHubStatus(ctx.els, "Could not save after removing account.", true);
+    return;
+  }
+
+  renderAll(ctx);
+  setHubStatus(ctx.els, "Account removed.");
 }
 
 function appendFamilyEvent(family, payload) {
@@ -761,6 +1040,21 @@ function getFamilyStats(family) {
   };
 }
 
+function getMemberSummary(accounts) {
+  let currentCents = 0;
+  let investedCents = 0;
+  for (const account of accounts) {
+    currentCents += account.currentCents;
+    investedCents += account.investedCents;
+  }
+  return {
+    currentCents,
+    investedCents,
+    netCents: currentCents - investedCents,
+    accountCount: accounts.length,
+  };
+}
+
 function getMemberSummaries(accounts) {
   const grouped = new Map();
   for (const account of accounts) {
@@ -780,6 +1074,16 @@ function getMemberSummaries(accounts) {
     item.accountCount += 1;
   }
   return [...grouped.values()].sort((a, b) => b.currentCents - a.currentCents);
+}
+
+function getMemberAccounts(family, memberName) {
+  return [...family.accounts]
+    .filter((account) => account.memberName === memberName)
+    .sort((a, b) => a.accountName.localeCompare(b.accountName));
+}
+
+function memberHasAccounts(family, memberName) {
+  return family.accounts.some((account) => account.memberName === memberName);
 }
 
 function getPrimaryFamily(db) {
@@ -841,9 +1145,34 @@ function parseAccountIdFromHash(hash) {
   return toPositiveInt(match[1], null);
 }
 
+function parseMemberNameFromHash(hash) {
+  if (typeof hash !== "string") {
+    return null;
+  }
+
+  const match = hash.match(/^#family-dashboard\/member-(.+)$/);
+  if (!match || !match[1]) {
+    return null;
+  }
+
+  try {
+    const decoded = decodeURIComponent(match[1]);
+    return decoded || null;
+  } catch {
+    return null;
+  }
+}
+
 function setDashboardHash() {
   if (window.location.hash !== "#family-dashboard") {
     window.location.hash = "#family-dashboard";
+  }
+}
+
+function setMemberHash(memberName) {
+  const nextHash = `#family-dashboard/member-${encodeURIComponent(memberName)}`;
+  if (window.location.hash !== nextHash) {
+    window.location.hash = nextHash;
   }
 }
 
